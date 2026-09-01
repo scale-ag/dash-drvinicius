@@ -73,32 +73,33 @@ os Insights.
 
 ## Contexto do funil
 
-**Funil de High Ticket (<<PREENCHER: nome do cliente>>)** — <<PREENCHER: descrição
-curta do cliente/oferta>>. Funil de captura via WhatsApp com venda 1:1 (comercial
-fecha por conversa/reunião, não carrinho direto): o anúncio no Meta Ads leva
-a uma página de captura com botão do WhatsApp; ao clicar, o lead chama no
-WhatsApp Business do cliente e o webhook de mensageria dispara na 1ª mensagem,
-que cai na aba **Conversas** (fonte principal de leads deste dashboard). O
-critério de qualificação (MQL) é <<PREENCHER: critério de MQL do cliente, ex.
-"o lead ser médico">> — se qualificado, segue a conversa com o comercial até a
-venda (registrada na aba de Compradores e cruzada de volta ao anúncio por telefone).
+**Funil de High Ticket (Dr. Vinícius)** — captação de leads (pacientes) para
+cirurgia plástica de alto ticket (E2-CAP). O anúncio no Meta Ads leva a um
+formulário/atendimento; o lead responde um questionário de qualificação
+(procedimento de interesse, urgência, forma de pagamento etc.) que cai na
+aba **Leads** (fonte única de leads deste dashboard) já com um escore de
+"Pontuação" calculado pela planilha. O critério de qualificação (MQL) é
+**Pontuação > 33** — se qualificado, segue para agendamento de consulta com
+o comercial até a cirurgia (registrada na planilha diária de Agendamentos,
+preenchida pelo comercial — sem atribuição por anúncio).
 
 ```
-Impressões → Cliques/abertura do WhatsApp → Leads → MQLs → Vendas → Faturamento
+Impressões → Cliques → Leads → MQLs → Agendamentos → Vendas (Cirurgias) → Faturamento
 ```
 
-- **MQL** = coluna de qualificação (<<PREENCHER: nome da coluna de MQL>>) == "Sim" (ver `build.py` → `is_medico`).
+- **MQL** = coluna "Pontuação" (aba Leads) > 33 (ver `build.py` → `is_qualified`).
 - **Agendamento** = o lead qualificado marcou horário de reunião com o comercial.
 - **Reunião Realizada** = a reunião de fato aconteceu (o lead compareceu). O
   inverso disso é o **No‑Show** (agendou e não compareceu) — a métrica de alerta
   mais importante entre Agendamento e Venda.
 
-> **Estado atual dos dados:** enquanto só houver mídia paga × Leads, o funil
-> vai até **MQL**. As etapas seguintes (Agendamentos, Reuniões Realizadas, Vendas,
-> Faturamento) e as métricas derivadas aparecem como “-” até chegar a lista do
-> comercial/vendas. Quando os campos `agendamentos`/`reunioes`/`vendas`/
-> `fat` forem somados por linha em `buildAgg/daily/totals` (`build/app.js`),
-> **toda a UI acende sozinha** (funil, tabelas, Top/Piores).
+> **Estado atual dos dados:** Agendamentos/Vendas/Faturamento já vêm da
+> planilha diária de Agendamentos (Cirurgias Confirmadas), mas **só como
+> agregado diário** — sem telefone/atribuição por anúncio, então acendem no
+> funil e na tabela diária da Visão Geral/Relatório, porém ficam "-" na
+> quebra por campanha/conjunto/anúncio (aba de mídia paga) e no Top/Piores
+> Anúncios (que caem de volta ao critério de MQLs). **Reunião Realizada**
+> (No‑Show/CPRR) segue "-" — a planilha não distingue agendado × comparecido.
 
 ## Fórmulas fundamentais
 

@@ -1,32 +1,38 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Gera a dashboard estatica (index.html) a partir de 4 abas da planilha central
-<<PREENCHER: nome da planilha central do cliente>>:
+Gera a dashboard estatica (index.html) a partir de 3 planilhas Google Sheets
+SEPARADAS do cliente Dr. Vinicius:
 
-  - "Conversas" (gid <<PREENCHER: GID_CONVERSAS>>): fonte PRINCIPAL de leads — webhook
-    de mensageria disparado na 1a mensagem recebida no WhatsApp Business. Usada em
-    TODOS os graficos/cards/tabelas/calculos de conversao.
-  - "Leads" (gid <<PREENCHER: GID_LEADS>>): fonte ANTIGA (popup/form legado). So e
-    contada (total), nunca entra em grafico/card/tabela/conversao.
-  - "Meta Ads" (gid <<PREENCHER: GID_META>>): investimento/impressoes/cliques do gerenciador.
-  - "New Subscriptions" / Compradores (gid <<PREENCHER: GID_SALES>>): usada para cruzar por
-    TELEFONE com a Conversas e atribuir Venda/Faturamento ao anuncio de origem.
+  - Leads (aba "Leads"): fonte UNICA de leads (formulario/atendimento). Coluna
+    "Pontuacao" (0-100) e o escore de qualificacao; MQL = Pontuacao > 33.
+  - Meta Ads (aba "Pagina 1"): investimento/impressoes/cliques/page views do
+    gerenciador de trafego.
+  - Agendamentos (aba "Planilha agendamento"): agregado DIARIO (nao por lead,
+    sem telefone/nome) preenchido pelo comercial — Agendamentos Confirmados,
+    Cirurgias Confirmadas e Valor Total Cirurgias. Sem chave de atribuicao por
+    anuncio, entao so alimenta a Visao Geral/Relatorio (totals/daily), nunca a
+    quebra por campanha/conjunto/anuncio da aba de midia paga.
 
-Criterio de Lead Qualificado (MQL): coluna de qualificacao do cliente
-(<<PREENCHER: nome da coluna de MQL, ex. "E medico?">>) == "Sim". Ajuste is_medico()
-e os aliases de coluna em process() para o criterio deste cliente.
+Atribuicao do anuncio de cada lead: a aba Leads nao traz Campanha/Conjunto
+prontos (só a coluna opcional "Campanha", raramente preenchida) — o vinculo
+confiavel e a coluna "Origem", que carrega o NOME DO ANUNCIO (igual ao "Ad
+Name" do Meta Ads). build_ad_struct() cruza por nome de anuncio -> escolhe a
+combinacao (Campanha, Conjunto) de maior gasto no Meta para aquele anuncio.
 
-Este script apenas LE as planilhas (export CSV publico) e emite os REGISTROS
-BRUTOS (leads[], meta[] e sales[]) dentro do HTML. sales[] tem um registro POR
-COMPRA (nunca agregado por telefone), com a DATA REAL da compra — camp/adset/ad
-vem da 1a conversa daquele telefone (atribuicao do anuncio de origem), mas a
-data nunca e' a da conversa, senao vendas de dias diferentes seriam somadas no
-mesmo dia. Todos os filtros, agregacoes, KPIs, tabelas e graficos sao
-calculados no navegador (client-side). Nunca escreve nada de volta.
+Nao ha aba de Compradores/New Subscriptions neste cliente — Vendas/Faturamento
+vêm do agregado diario de Agendamentos (Cirurgias Confirmadas = vendas), não
+de cruzamento por telefone.
 
-Teste local: --conversas-file / --meta-file / --sales-file / --leads-file
-apontando para CSVs baixados.
+Este script apenas LE as planilhas (export CSV publico, via gviz por NOME da
+aba — nao depende de gid) e emite os REGISTROS BRUTOS (leads[], meta[],
+agenda[]) dentro do HTML. Todos os filtros, agregacoes, KPIs, tabelas e
+graficos sao calculados no navegador (client-side). Nunca escreve nada de
+volta nas planilhas.
+
+Teste local: --leads-file / --meta-file / --agenda-file apontando para CSVs
+baixados (o sandbox do agente nao alcanca docs.google.com; o runner do
+GitHub Actions alcanca).
 """
 from __future__ import annotations
 
@@ -38,41 +44,39 @@ import os
 import re
 import sys
 import unicodedata
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone, timedelta
 
-SPREADSHEET_ID = "<<PREENCHER: ID da planilha central (Google Sheets) do cliente>>"
-GID_CONVERSAS = "<<PREENCHER: gid da aba de Conversas / fonte principal de leads>>"
-GID_LEADS = "<<PREENCHER: gid da aba de Leads legado (popup/form) — só contada>>"
-GID_META = "<<PREENCHER: gid da aba Meta Ads>>"
-GID_SALES = "<<PREENCHER: gid da aba de Compradores (New Subscriptions) — cruzada por telefone>>"
-EXPORT_URL = "https://docs.google.com/spreadsheets/d/{sid}/export?format=csv&gid={gid}"
+SPREADSHEET_ID_META = "1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ"
+SHEET_META = "Página 1"
+SPREADSHEET_ID_LEADS = "1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I"
+SHEET_LEADS = "Leads"
+SPREADSHEET_ID_AGENDA = "1cOD2Sa9fp8TPJrBia7RY3br_Htg5pCJc5squzmLY4Dk"
+SHEET_AGENDA = "Planilha agendamento"
+# gviz por NOME da aba (nao pelo gid) — funciona independente de qual posicao
+# a aba ocupa na planilha, so exige que a planilha esteja "qualquer um com o
+# link pode ver".
+EXPORT_URL = "https://docs.google.com/spreadsheets/d/{sid}/gviz/tq?tqx=out:csv&sheet={sheet}"
 
 # Identificação do cliente/conta (usada só em textos/relatórios — não afeta o cruzamento de dados).
-CLIENT_NAME = "<<PREENCHER: nome do cliente>>"
-MAIN_PRODUCT = "<<PREENCHER: nome do produto/oferta principal>>"
-# Prefixo comum a TODAS as campanhas da conta (usado para agrupar campanhas no
-# dashboard). Ajuste ao padrão de nomenclatura de campanha deste cliente.
-MAIN_PRODUCT_PREFIX = "<<PREENCHER: prefixo das campanhas do cliente, ex. NOMECLIENTE>>"
+CLIENT_NAME = "Dr. Vinícius"
+MAIN_PRODUCT = "Captação de Leads"
+# Prefixo comum a TODAS as campanhas da conta (usado para agrupar/documentar
+# campanhas no dashboard — hoje o build não filtra por ele, mantém tudo).
+MAIN_PRODUCT_PREFIX = "DR. VINICIUS | E2-CAP"
 
 BRT = timezone(timedelta(hours=-3))   # horario de Brasilia (exibicao)
-TAX_FACTOR = 1.0   # <<PREENCHER: fator de imposto/taxa da conta de mídia, ex. 1.13806 (13,806%); 1.0 = sem imposto>>
+TAX_FACTOR = 1.0   # sem imposto de mídia informado para este cliente
 
 # --------------------------------------------------------------------------- #
 # Regras da aba Relatório (Top/Piores anúncios)
 # --------------------------------------------------------------------------- #
-# Amostra mínima para julgar um anúncio como "vencedor" ou "ruim". Abaixo disso
-# ele entra como "Em observação" (dado insuficiente) — nunca é classificado só
-# porque teve 1 resultado com pouco investimento. Ajuste conforme o ticket/CAC.
 SAMPLE_MIN_SPEND = 100.0   # gasto mínimo (R$) para amostra relevante
 SAMPLE_MIN_MQLS = 3        # MQLs mínimos para julgar qualidade profunda
 TOP_ADS_N = 10             # nº de linhas em Top / Piores anúncios
 
 # Metas & parâmetros da conta (DEFAULTS do painel editável da aba Relatório).
-# São só o valor inicial: o usuário edita no navegador (persistido em
-# localStorage) e as tabelas de anúncios recoram CPMQL/CAC e reavaliam a
-# amostra ao vivo. None = "meta não definida" (métrica aparece sem cor até o
-# gestor preencher).
 META_CPMQL = None          # meta de CPMQL (R$/MQL); None = não definida
 META_CAC = None            # meta de CAC (R$/venda); None = não definida
 VOLUME_MIN_AMOSTRAL = SAMPLE_MIN_MQLS  # conversões (MQLs) mínimas p/ amostra confiável
@@ -96,6 +100,10 @@ def read_csv_file(path: str) -> list[list[str]]:
 
 def load_rows(url: str, local: str | None) -> list[list[str]]:
     return read_csv_file(local) if local else fetch_csv(url)
+
+
+def sheet_url(spreadsheet_id: str, sheet_name: str) -> str:
+    return EXPORT_URL.format(sid=spreadsheet_id, sheet=urllib.parse.quote(sheet_name))
 
 
 # --------------------------------------------------------------------------- #
@@ -136,9 +144,11 @@ def parse_date(v: str) -> str | None:
     m = re.match(r"(\d{4})-(\d{2})-(\d{2})", s)
     if m:
         return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
-    for fmt in ("%d/%m/%Y", "%m/%d/%Y", "%d/%m/%y", "%b %d, %Y", "%Y/%m/%d"):
+    # aba Leads traz "Data/Hora" (ex. "8/11/2026 14:57:19") — descarta a hora
+    s_date = s.split(" ")[0]
+    for fmt in ("%m/%d/%Y", "%d/%m/%Y", "%d/%m/%y", "%b %d, %Y", "%Y/%m/%d"):
         try:
-            return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
+            return datetime.strptime(s_date, fmt).strftime("%Y-%m-%d")
         except ValueError:
             continue
     return None
@@ -148,12 +158,9 @@ def is_test_lead(rowtext: str) -> bool:
     return "<test lead" in rowtext.lower()
 
 
-# <<PREENCHER: critério de MQL deste cliente>> — implementação de referência abaixo
-# usa uma coluna booleana "Sim/Não". Renomeie a função e ajuste conforme o critério
-# de qualificação do cliente (o exemplo abaixo qualifica pela coluna de MQL == "Sim").
-def is_medico(v: str | None) -> bool:
-    """Critério de MQL: coluna de qualificação (<<PREENCHER: nome da coluna>>) == "Sim"."""
-    return norm(v) in ("sim", "s", "yes", "true", "1")
+def is_qualified(v: str | None) -> bool:
+    """Critério de MQL deste cliente: coluna "Pontuação" (aba Leads) > 33."""
+    return to_float(v) > 33
 
 
 def pretty_specialty(v: str) -> str:
@@ -161,43 +168,9 @@ def pretty_specialty(v: str) -> str:
     return s if s else "Sem resposta"
 
 
-def mask_email(e: str) -> str:
-    e = (e or "").strip()
-    if "@" not in e:
-        return "—"
-    user, dom = e.split("@", 1)
-    keep = user[:2] if len(user) > 2 else user[:1]
-    return f"{keep}****@{dom}"
-
-
 def mask_phone(p: str) -> str:
     digits = re.sub(r"\D", "", p or "")
     return f"…{digits[-4:]}" if len(digits) >= 4 else "—"
-
-
-def norm_phone(p: str) -> str:
-    return re.sub(r"\D", "", p or "")
-
-
-def canon_phone(p: str) -> str:
-    """Chave CANÔNICA de telefone p/ cruzar Compradores × Conversas, robusta às
-    3 variações que faziam o mesmo número não bater quando comparado só por
-    dígitos (norm_phone):
-      - DDI "55" presente de um lado e ausente do outro
-        (5511988887777 vs 11988887777);
-      - 9º dígito do celular presente/ausente
-        (11988887777 vs 1188887777);
-      - máscara/espacos/parênteses (já removidos por norm_phone).
-    Estratégia: remove o DDI 55 (quando sobra DDD+número) e usa DDD (2 díg.) +
-    ÚLTIMOS 8 DÍGITOS — que é o mesmo com ou sem o 9. Devolve chave de 10 díg.
-    (DDD+8). Números curtos/estrangeiros (< 10 díg. após limpar) voltam como
-    estão, pra não colidir à toa."""
-    d = norm_phone(p)
-    if len(d) > 11 and d.startswith("55"):
-        d = d[2:]            # tira DDI do Brasil, sobrando DDD + local
-    if len(d) >= 10:
-        return d[:2] + d[-8:]   # DDD + últimos 8 (drop do 9º dígito, se houver)
-    return d
 
 
 def first_last_initial(name: str) -> str:
@@ -239,151 +212,36 @@ def cell(row, i):
 
 
 # --------------------------------------------------------------------------- #
-# Compradores ("New Subscriptions") -> indice por telefone
+# Anúncio -> (campanha, conjunto) dominante por gasto (Meta Ads)
 # --------------------------------------------------------------------------- #
-def build_sales_index(sales_rows):
-    """Le a aba de Compradores e devolve {telefone_normalizado: [{"d":..,"fat":..,"receita":..,"nm":..}, ...]},
-    UMA ENTRADA POR LINHA de compra (nao agregada por telefone). Cruzamento é por
-    TELEFONE (a Conversas não tem e-mail; o Lead LP antigo tem e-mail mas está fora
-    do escopo principal deste dashboard). Mantemos cada compra separada — com sua
-    própria data — para atribuir a venda ao dia em que ela REALMENTE aconteceu,
-    em vez de empilhar todo o histórico de compras do telefone num único dia.
-    "nm" (nome, sem mascara) fica só p/ diagnóstico de telefone não casado
-    (log_unmatched_sales) — nunca é exportado em sales[]/DATA."""
-    header = sales_rows[0] if sales_rows else []
-    idx = header_index(
-        header,
-        {"phone": ["telefone"], "date": ["data"], "faturamento": ["faturamento"], "receita": ["receita"],
-         "name": ["nome"]},
-        {"phone": 3, "date": 0, "faturamento": 6, "receita": 7, "name": 1},
-    )
-    out: dict[str, list] = {}
-    for row in sales_rows[1:]:
-        if not any((c or "").strip() for c in row):
+def build_ad_struct(meta_rows, midx):
+    """A aba Leads não traz Campanha/Conjunto prontos por linha — só o nome do
+    anúncio (coluna "Origem", que bate com o "Ad Name" do Meta). Aqui cruzamos
+    por nome de anúncio e escolhemos a combinação (Campanha, Conjunto) de MAIOR
+    GASTO no Meta para aquele anúncio (um anúncio pode rodar em mais de um
+    conjunto ao longo do período)."""
+    acc: dict[str, dict[tuple[str, str], float]] = {}
+    for row in meta_rows[1:]:
+        ad = cell(row, midx["ad"])
+        if not ad:
             continue
-        phone = norm_phone(cell(row, idx["phone"]))
-        if not phone:
-            continue
-        out.setdefault(phone, []).append({
-            "d": parse_date(cell(row, idx["date"])),
-            "fat": to_float(cell(row, idx["faturamento"])),
-            "receita": to_float(cell(row, idx["receita"])),
-            "nm": cell(row, idx["name"]),
-        })
+        camp = cell(row, midx["campaign"]) or "(sem campanha)"
+        adset = cell(row, midx["adset"]) or "(sem conjunto)"
+        sp = to_float(cell(row, midx["spent"]))
+        combos = acc.setdefault(ad, {})
+        key = (camp, adset)
+        combos[key] = combos.get(key, 0.0) + sp
+    out = {}
+    for ad, combos in acc.items():
+        best_key = max(combos, key=combos.get)
+        out[ad] = {"camp": best_key[0], "adset": best_key[1]}
     return out
-
-
-def log_unmatched_sales(sales_index, phone_attrib):
-    """Diagnóstico (stderr, não afeta a saída): compras da aba Compradores cujo
-    telefone não bate com NENHUMA conversa da aba Conversas MESMO após a
-    canonicalização (canon_phone, que já cobre DDI "55" e o 9º dígito do
-    celular). Essas vendas AGORA entram na dash mesmo assim (contam nos totais /
-    Visão Geral), só ficam SEM atribuição de anúncio ("(sem campanha)") — este
-    log serve pra dimensionar quanta receita fica sem origem e conferir se é
-    compra por outro canal (esperado) ou algum telefone ainda divergente."""
-    matched = sum(1 for phone in sales_index if canon_phone(phone) in phone_attrib)
-    unmatched = [(phone, p) for phone, purchases in sales_index.items()
-                 if canon_phone(phone) not in phone_attrib for p in purchases]
-    print(f"  vendas atribuídas a anúncio: {matched}/{len(sales_index)} telefones "
-          f"(cruzamento canônico Compradores × Conversas)", file=sys.stderr)
-    if not unmatched:
-        return
-    print(f"  {len(unmatched)} compra(s) SEM anúncio de origem (entram nos totais como \"(sem campanha)\"):",
-          file=sys.stderr)
-    for phone, p in unmatched:
-        print(f"    - {p['d'] or '?'}  {first_last_initial(p['nm'])}  tel …{phone[-4:] if len(phone) >= 4 else phone}",
-              file=sys.stderr)
 
 
 # --------------------------------------------------------------------------- #
 # Processamento -> registros brutos
 # --------------------------------------------------------------------------- #
-def process(conversas_rows, meta_rows, sales_rows, leads_lp_rows):
-    sales_index = build_sales_index(sales_rows)
-
-    cheader = conversas_rows[0] if conversas_rows else []
-    # <<PREENCHER: aliases da coluna de MQL do cliente>> — "medico" abaixo é o exemplo
-    # (ajuste os aliases e o índice de fallback ao cabeçalho da aba Conversas do cliente).
-    cidx = header_index(
-        cheader,
-        {"created": ["data"], "phone": ["telefone"], "name": ["nome"],
-         "medico": ["e medico", "medico"], "campaign": ["campanha"],
-         "adset": ["conjunto"], "ad": ["anuncio"], "specialty": ["especialidades", "especialidade"]},
-        {"created": 0, "phone": 3, "name": 2, "medico": 4, "campaign": 8, "adset": 9, "ad": 10, "specialty": 11},
-    )
-
-    leads = []
-    # atribuicao do ANUNCIO/campanha de uma venda por telefone: a 1a conversa
-    # daquele telefone (a mais antiga de fato) e' quem levou aquele contato a
-    # comprar, entao e' ela que define camp/adset/ad da venda — evita atribuir
-    # a mesma compra a mais de uma conversa quando o numero aparece varias vezes.
-    # A DATA da venda, porem, e' a data real da compra (aba Compradores), nunca
-    # a data da conversa — datas diferentes nao devem ser somadas no mesmo dia.
-    rows_sorted = sorted(
-        [r for r in conversas_rows[1:] if any((c or "").strip() for c in r)],
-        key=lambda r: parse_date(cell(r, cidx["created"])) or "",
-    )
-    attributed_phones: set[str] = set()
-    phone_attrib: dict[str, dict] = {}
-    for row in rows_sorted:
-        if is_test_lead(" ".join(str(c) for c in row)):
-            continue
-        campaign_raw = cell(row, cidx["campaign"])
-        campaign_valid = valid_utm(campaign_raw)
-        src = "meta" if campaign_valid else "org"
-        phone = canon_phone(cell(row, cidx["phone"]))
-        camp = campaign_raw if campaign_valid else "(sem campanha)"
-        adset = cell(row, cidx["adset"]) if campaign_valid else "(sem conjunto)"
-        ad = cell(row, cidx["ad"]) if campaign_valid else "(sem anúncio)"
-        conversa_date = parse_date(cell(row, cidx["created"]))
-        if phone and phone not in attributed_phones:
-            attributed_phones.add(phone)
-            phone_attrib[phone] = {"src": src, "camp": camp, "adset": adset, "ad": ad, "d": conversa_date}
-        specialty = pretty_specialty(cell(row, cidx["specialty"]))
-        leads.append({
-            "d": parse_date(cell(row, cidx["created"])),
-            "src": src,
-            "plat": "ig" if src == "meta" else "—",
-            "camp": camp,
-            "adset": adset,
-            "ad": ad,
-            "prof": specialty,
-            "bucket": specialty,
-            "q": 1 if is_medico(cell(row, cidx["medico"])) else 0,
-            "utm": 1 if campaign_valid else 0,
-            "nm": first_last_initial(cell(row, cidx["name"])),
-            "em": "—",
-            "ph": mask_phone(cell(row, cidx["phone"])),
-        })
-
-    # Vendas: um registro POR COMPRA (nunca agregada por telefone), na data real
-    # da compra. TODA venda entra (aparece na Visão Geral e nos totais) — decisão
-    # do cliente: "todas as vendas entram na Geral, só as atribuídas ao Meta
-    # entram no Meta". camp/adset/ad vem da 1a conversa daquele telefone
-    # (phone_attrib, cruzado pela chave canônica canon_phone). Quando NÃO há
-    # conversa correspondente (comprou por outro canal, ou o telefone do checkout
-    # difere do WhatsApp de um jeito que a canonicalização não cobre), a venda
-    # ainda conta, porém SEM atribuição de anúncio: cai em "(sem campanha)" /
-    # src="org" — some da quebra por campanha do Meta, mas nunca dos totais.
-    sales = []
-    NO_ATTRIB = {"src": "org", "camp": "(sem campanha)", "adset": "(sem conjunto)",
-                 "ad": "(sem anúncio)", "d": None}
-    for phone, purchases in sales_index.items():
-        attrib = phone_attrib.get(canon_phone(phone)) or NO_ATTRIB
-        for p in purchases:
-            sales.append({
-                "d": p["d"] or attrib["d"],
-                "src": attrib["src"],
-                "camp": attrib["camp"],
-                "adset": attrib["adset"],
-                "ad": attrib["ad"],
-                "vendas": 1,
-                "fat": round(p["fat"], 2),
-                "receita": round(p["receita"], 2),
-            })
-
-    log_unmatched_sales(sales_index, phone_attrib)
-
+def process(leads_rows, meta_rows, agenda_rows):
     mheader = meta_rows[0] if meta_rows else []
     midx = header_index(
         mheader,
@@ -391,21 +249,16 @@ def process(conversas_rows, meta_rows, sales_rows, leads_lp_rows):
          "ad": ["ad name"], "spent": ["amount spent", "valor gasto", "gasto"], "impr": ["impressions", "impress"],
          "clicks": ["link clicks", "clicks", "cliques"], "leads": ["leads"],
          "pv": ["landing page views", "page views", "pageviews"],
-         # Cliente não tem evento "Initiate Checkout" configurado no pixel — usa
-         # "Adds to Cart" como proxy de Checkout (decisão do cliente).
+         # Este cliente não tem coluna de Checkout/Add to Cart no Meta Ads —
+         # fica None (a UI mostra "-").
          "chk": ["adds to cart", "add to cart", "initiate checkout", "checkouts iniciados", "checkouts"],
-         # Link do criativo (ex. Instagram) — coluna opcional adicionada pelo cliente
-         # na aba de mídia. Usada na aba Relatório (Top/Piores anúncios) para linkar
-         # o anúncio. Aliases cobrem variações do cabeçalho.
          "link": ["creative instagram permalink", "instagram permalink", "permalink",
                   "creative link", "link do anuncio", "link do criativo"]},
-        {"day": 0, "campaign": 2, "adset": 3, "ad": 4, "spent": 5, "impr": 6, "clicks": 7, "leads": None, "pv": 8},
+        {"day": 0, "campaign": 1, "adset": 2, "ad": 3, "impr": 4, "clicks": 5, "pv": 6, "spent": 7},
     )
+    ad_struct = build_ad_struct(meta_rows, midx)
 
     meta = []
-    # Anúncio (nome) -> 1 permalink do criativo. "Qualquer um correlato" ao
-    # anúncio serve (o mesmo criativo pode rodar em vários dias/conjuntos);
-    # guardamos o primeiro link não-vazio encontrado para cada anúncio.
     ad_links = {}
     for row in meta_rows[1:]:
         if not any((c or "").strip() for c in row):
@@ -427,41 +280,106 @@ def process(conversas_rows, meta_rows, sales_rows, leads_lp_rows):
             "ml": to_float(cell(row, midx["leads"])),
         })
 
-    # Leads (LP) — fonte antiga, fora de uso. Só contamos o total para
-    # referência (não entra em leads[]/gráficos/tabelas/conversão).
-    leads_lp_total = sum(
-        1 for row in leads_lp_rows[1:]
-        if any((c or "").strip() for c in row) and not is_test_lead(" ".join(str(c) for c in row))
-    ) if leads_lp_rows else 0
+    lheader = leads_rows[0] if leads_rows else []
+    lidx = header_index(
+        lheader,
+        {"created": ["data/hora", "data"], "phone": ["telefone"], "name": ["nome"],
+         "score": ["pontuacao"], "procedimento": ["procedimento"],
+         "campanha": ["campanha"], "origem": ["origem"]},
+        {"created": 0, "name": 1, "phone": 2, "score": 4, "procedimento": 5, "origem": 12, "campanha": 16},
+    )
+
+    leads = []
+    for row in leads_rows[1:]:
+        if not any((c or "").strip() for c in row):
+            continue
+        rowtext = " ".join(str(c) for c in row)
+        if is_test_lead(rowtext):
+            continue
+        origem = cell(row, lidx["origem"])
+        campanha_col = cell(row, lidx["campanha"])
+        struct = ad_struct.get(origem) if origem else None
+        if struct:
+            camp, adset, ad, src = struct["camp"], struct["adset"], origem, "meta"
+        elif valid_utm(campanha_col):
+            camp, adset, ad, src = campanha_col, "(sem conjunto)", (origem or "(sem anúncio)"), "meta"
+        else:
+            camp, adset, ad, src = "(sem campanha)", "(sem conjunto)", "(sem anúncio)", "org"
+        procedimento = pretty_specialty(cell(row, lidx["procedimento"]))
+        leads.append({
+            "d": parse_date(cell(row, lidx["created"])),
+            "src": src,
+            "plat": "ig" if src == "meta" else "—",
+            "camp": camp,
+            "adset": adset,
+            "ad": ad,
+            "prof": procedimento,
+            "bucket": procedimento,
+            "q": 1 if is_qualified(cell(row, lidx["score"])) else 0,
+            "utm": 1 if src == "meta" else 0,
+            "nm": first_last_initial(cell(row, lidx["name"])),
+            "em": "—",
+            "ph": mask_phone(cell(row, lidx["phone"])),
+        })
+
+    # Agendamentos: agregado DIÁRIO preenchido pelo comercial (sem telefone/nome,
+    # sem atribuição por anúncio) — só entra em totals()/daily() no app.js
+    # (Visão Geral/Relatório), nunca na quebra por campanha/conjunto/anúncio.
+    # "Data" vem sem ano (ex. "09/07") — assume o ano corrente do build; datas
+    # futuras (linhas em branco pré-criadas p/ o resto do ano) são descartadas.
+    aheader = agenda_rows[0] if agenda_rows else []
+    aidx = header_index(
+        aheader,
+        {"date": ["data"], "agendamentos": ["agendamentos confirmados"],
+         "cirurgias": ["cirurgias confirmadas"], "fat_cirurgia": ["valor total cirurgias"]},
+        {"date": 0, "agendamentos": 1, "cirurgias": 4, "fat_cirurgia": 6},
+    )
+    now_brt = datetime.now(BRT)
+    today_str = now_brt.strftime("%Y-%m-%d")
+    year_ref = now_brt.year
+    agenda = []
+    for row in agenda_rows[1:]:
+        if not any((c or "").strip() for c in row):
+            continue
+        m = re.match(r"^(\d{1,2})/(\d{1,2})$", cell(row, aidx["date"]))
+        if not m:
+            continue
+        dd, mm = int(m.group(1)), int(m.group(2))
+        if not (1 <= mm <= 12 and 1 <= dd <= 31):
+            continue
+        d = f"{year_ref:04d}-{mm:02d}-{dd:02d}"
+        if d > today_str:
+            continue
+        agendamentos = to_float(cell(row, aidx["agendamentos"]))
+        cirurgias = to_float(cell(row, aidx["cirurgias"]))
+        fat = to_float(cell(row, aidx["fat_cirurgia"]))
+        if agendamentos == 0 and cirurgias == 0 and fat == 0:
+            continue
+        agenda.append({"d": d, "agendamentos": agendamentos, "vendas": cirurgias, "fat": round(fat, 2)})
 
     dates = sorted({d for d in (
-        [l["d"] for l in leads if l["d"]] + [m["d"] for m in meta if m["d"]] + [s["d"] for s in sales if s["d"]]
+        [l["d"] for l in leads if l["d"]] + [m["d"] for m in meta if m["d"]] + [a["d"] for a in agenda if a["d"]]
     )})
-    now_brt = datetime.now(BRT)
     return {
         "build": {
             "generated_at_brt": now_brt.strftime("%d/%m/%Y %H:%M"),
             "build_id": datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S"),
-            "today": now_brt.strftime("%Y-%m-%d"),
+            "today": today_str,
             "date_min": dates[0] if dates else None,
             "date_max": dates[-1] if dates else None,
             "tax_factor": TAX_FACTOR,
-            # config da aba Relatório (lida pelo front)
             "sample_min_spend": SAMPLE_MIN_SPEND,
             "sample_min_mqls": SAMPLE_MIN_MQLS,
             "top_ads_n": TOP_ADS_N,
-            # metas & parâmetros (defaults do painel editável; None = não definida)
             "meta_cpmql": META_CPMQL,
             "meta_cac": META_CAC,
             "volume_min_amostral": VOLUME_MIN_AMOSTRAL,
             "n_dias_corte": N_DIAS_CORTE,
-            # referência apenas (não usado na UI): total da fonte antiga "Leads LP".
-            "leads_lp_total": leads_lp_total,
         },
         "leads": leads,
         "meta": meta,
-        "sales": sales,
-        # Anúncio -> permalink do criativo (aba Relatório).
+        "sales": [],   # sem aba de Compradores neste cliente — vendas vêm de agenda[]
+        "agenda": agenda,
         "ad_links": ad_links,
         # Insights de Tráfego (texto pré-escrito, lido de relatorios.json). Preenchido
         # em main() via load_briefings(); fica {} se relatorios.json não existir.
@@ -517,20 +435,18 @@ def render(data, template_path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--conversas-file", help="CSV local da aba Conversas (fonte principal de leads)")
-    ap.add_argument("--leads-file", help="CSV local da aba Leads (LP, legado — só contada)")
-    ap.add_argument("--meta-file")
-    ap.add_argument("--sales-file", help="CSV local da aba New Subscriptions (Compradores)")
+    ap.add_argument("--leads-file", help="CSV local da aba Leads (fonte única de leads)")
+    ap.add_argument("--meta-file", help="CSV local da aba Meta Ads (Página 1)")
+    ap.add_argument("--agenda-file", help="CSV local da aba Planilha agendamento")
     ap.add_argument("--template", default="build/template.html")
     ap.add_argument("--out", default="dist/index.html")
     args = ap.parse_args()
 
-    conversas_rows = load_rows(EXPORT_URL.format(sid=SPREADSHEET_ID, gid=GID_CONVERSAS), args.conversas_file)
-    meta_rows = load_rows(EXPORT_URL.format(sid=SPREADSHEET_ID, gid=GID_META), args.meta_file)
-    sales_rows = load_rows(EXPORT_URL.format(sid=SPREADSHEET_ID, gid=GID_SALES), args.sales_file)
-    leads_lp_rows = load_rows(EXPORT_URL.format(sid=SPREADSHEET_ID, gid=GID_LEADS), args.leads_file)
+    meta_rows = load_rows(sheet_url(SPREADSHEET_ID_META, SHEET_META), args.meta_file)
+    leads_rows = load_rows(sheet_url(SPREADSHEET_ID_LEADS, SHEET_LEADS), args.leads_file)
+    agenda_rows = load_rows(sheet_url(SPREADSHEET_ID_AGENDA, SHEET_AGENDA), args.agenda_file)
 
-    data = process(conversas_rows, meta_rows, sales_rows, leads_lp_rows)
+    data = process(leads_rows, meta_rows, agenda_rows)
 
     # Insights de Tráfego (texto pré-escrito) — lidos do arquivo versionado ao
     # lado do template. Sem chamada de API no build.
@@ -543,13 +459,12 @@ def main():
 
     b = data["build"]
     q = sum(l["q"] for l in data["leads"])
-    vd = sum(s["vendas"] for s in data["sales"])
-    fat = sum(s["fat"] for s in data["sales"])
+    vd = sum(a["vendas"] for a in data["agenda"])
+    fat = sum(a["fat"] for a in data["agenda"])
     print("== build ok ==", file=sys.stderr)
     print(f"  periodo   : {b['date_min']} -> {b['date_max']}", file=sys.stderr)
-    print(f"  leads MSG : {len(data['leads'])}  MQLs (qualificados): {q}", file=sys.stderr)
-    print(f"  vendas    : {vd}  faturamento: R$ {fat:,.2f}", file=sys.stderr)
-    print(f"  leads LP  : {b['leads_lp_total']} (fonte antiga, não usada na UI)", file=sys.stderr)
+    print(f"  leads     : {len(data['leads'])}  MQLs (Pontuação > 33): {q}", file=sys.stderr)
+    print(f"  agenda    : {len(data['agenda'])} dias com dado  vendas: {vd}  faturamento: R$ {fat:,.2f}", file=sys.stderr)
     print(f"  meta      : {len(data['meta'])} linhas", file=sys.stderr)
     print(f"  out       : {args.out}", file=sys.stderr)
 

@@ -1,40 +1,38 @@
-# CLAUDE.md — Contexto do projeto (TEMPLATE High Ticket)
+# CLAUDE.md — Contexto do projeto (Dashboard Dr. Vinícius, a partir do TEMPLATE High Ticket)
 
 > Este arquivo é lido automaticamente pelo Claude Code ao abrir o repositório.
 > Ele carrega TODO o contexto necessário para continuar o trabalho sem depender
 > de mensagens anteriores. Mantenha-o atualizado.
 >
-> **Este é um TEMPLATE limpo.** Todos os valores específicos do cliente estão
-> marcados como `<<PREENCHER: descrição>>`. Siga o CHECKLIST abaixo para
-> configurar um cliente novo.
+> **Este repositório já está configurado** para o cliente Dr. Vinícius
+> (funil E2-CAP). Para replicar o template (engine) para outro cliente, veja
+> `GUIA-REPLICACAO.md` — a lista de arquivos "específico do cliente" que
+> mudam a cada replicação está em `AGENTS.md`.
 
 ---
 
-## ✅ CHECKLIST DE NOVO CLIENTE (fazer em ordem)
-
-Preencha cada `<<PREENCHER: …>>` do repositório. Ordem sugerida:
+## ✅ CHECKLIST DE NOVO CLIENTE (referência para replicar — este repo já está feito)
 
 1. **`build/build.py` — constantes do topo:**
-   - `SPREADSHEET_ID` — ID da planilha central do Google Sheets do cliente.
-   - `GID_CONVERSAS` — gid da aba de Conversas (fonte principal de leads).
-   - `GID_LEADS` — gid da aba de Leads legado (popup/form; só contada).
-   - `GID_META` — gid da aba Meta Ads.
-   - `GID_SALES` — gid da aba de Compradores (New Subscriptions).
+   - `SPREADSHEET_ID_META`/`SHEET_META`, `SPREADSHEET_ID_LEADS`/`SHEET_LEADS`,
+     `SPREADSHEET_ID_AGENDA`/`SHEET_AGENDA` — ID + nome da aba de cada planilha
+     do cliente (podem ser 1 planilha com várias abas, ou várias planilhas
+     separadas como neste cliente — `build.py` busca por NOME da aba via gviz).
    - `CLIENT_NAME`, `MAIN_PRODUCT` — nome do cliente e da oferta principal.
    - `MAIN_PRODUCT_PREFIX` — prefixo comum às campanhas do cliente.
    - `TAX_FACTOR` — fator de imposto/taxa da mídia (1.0 = sem imposto).
-2. **`build/build.py` — critério de MQL:** ajuste `is_medico()` e os aliases da
-   coluna de qualificação em `process()` (`"medico": [...]` + índice de fallback)
-   ao critério e ao cabeçalho da aba Conversas do cliente.
+2. **`build/build.py` — critério de MQL:** ajuste `is_qualified()` e os aliases
+   das colunas em `process()`/`header_index()` ao critério e ao cabeçalho da
+   aba de leads do cliente.
 3. **`build/app.js`:** revisar os rótulos fixos de UI que citam o critério de MQL
-   ("MQLs (...)") e o agrupamento de "faixa"/especialidade — o critério de
-   `build.py` não propaga sozinho para esses textos.
+   ("MQLs (...)") e o agrupamento de dimensão de leads (aqui: "Procedimento") —
+   o critério de `build.py` não propaga sozinho para esses textos.
 4. **`build/template.html`:** preencher `<title>` e o logo (`logo-main`/`logo-sub`)
    com o nome/slogan do cliente. (Opcional: trocar o favicon base64.)
 5. **`build/identidade-visual.css`:** ajustar cores se o cliente tiver identidade
    própria (opcional — o default funciona).
 6. **`README.md` / `SETUP-CRON.md` / este `CLAUDE.md` / `AGENTS.md`:** owner/repo
-   do GitHub, URL do GitHub Pages, nome do cliente, planilha/gids.
+   do GitHub, URL do GitHub Pages, nome do cliente, planilhas/abas.
 7. **`build/GUIA-RELATORIOS.md`:** preencher o "Contexto do funil" (cliente,
    oferta, critério de MQL).
 8. **GitHub Pages + Actions:** confirmar que `build/` + `.github/workflows/deploy.yml`
@@ -47,8 +45,8 @@ Preencha cada `<<PREENCHER: …>>` do repositório. Ordem sugerida:
       com os números), e
     - criar a **Routine do Claude** (`create_trigger` apontando para este repo)
       que lê os números + os 2 guias e escreve `relatorios.json` na `main`
-      (ver "Briefing automático" abaixo). **Não vem pronta** — precisa ser
-      recriada por cliente.
+      (ver "Briefing automático" abaixo). **Não vem pronta neste repo** — não
+      foi criada (opcional, a pedir).
 11. **Testar local** com CSVs de amostra antes de publicar (3 páginas, tema
     claro/escuro, multi-seleção).
 
@@ -66,73 +64,74 @@ puro + Chart.js via CDN) publicado no **GitHub Pages**, que cruza a lista de
 **Leads** com o gerenciador de mídia paga e se atualiza sozinho a cada ~30 min
 (build 100% na nuvem via GitHub Actions, disparado externamente pelo cron-job.org).
 
-- **URL pública:** `https://<<PREENCHER: owner do GitHub>>.github.io/<<PREENCHER: nome do repositório>>/`
+- **URL pública:** `https://scale-ag.github.io/dash-drvinicius/`
 - **Somente leitura** das planilhas. Nunca escrever de volta.
 
 ## Fontes de dados (Google Sheets)
 
-Spreadsheet ID: `<<PREENCHER: SPREADSHEET_ID>>` ("<<PREENCHER: nome da planilha central>>").
+Este cliente usa **3 planilhas SEPARADAS** (não uma central com múltiplas
+abas) — `build.py` lê cada uma por **nome da aba**, via endpoint `gviz`
+(`.../gviz/tq?tqx=out:csv&sheet=<nome>`), então não depende de gid.
 
-| Aba | gid | Colunas usadas |
-|-----|-----|----------------|
-| **Conversas** (fonte principal — webhook de mensageria/WhatsApp) | `<<PREENCHER: GID_CONVERSAS>>` | `Data` · `Mensagem` · `Nome` · `Telefone` · coluna de MQL · `Campanha` · `Conjunto` · `Anúncio` · `Especialidades` |
-| **Leads** (legado — popup/form antigo, só contada) | `<<PREENCHER: GID_LEADS>>` | `Data` · `Nome` · `Email` · `Telefone` · coluna de MQL · `Especialidade` · `utm_*` · `MQL` · `Compra Detectada`/`Faturamento Detectado`/`Data Compra` |
-| **Meta Ads** | `<<PREENCHER: GID_META>>` | `Day` · `Ad ID` · `Campaign Name` · `Ad Set Name` · `Ad Name` · `Amount Spent` · `Impressions` · `Link Clicks` · `Landing Page Views` · `Content Views` · `Adds to Cart` · `Subscriptions` · `Subscribe Conversion Value` |
-| **New Subscriptions** (Compradores) | `<<PREENCHER: GID_SALES>>` | `Data` · `Nome` · `Email` · `Telefone` · `Produto` · `Oferta` · `Faturamento` · `Receita` · `Método de Pagamento` · `Campanha` · `Conjunto` · `Anúncio` · `UF` · `Cidade` · `Zip Code` · `Endereço` |
+| Planilha | ID | Aba | Colunas usadas |
+|-----|-----|-----|----------------|
+| **Meta Ads** | `1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ` | `Página 1` | `Day` · `Campaign Name` · `Ad Set Name` · `Ad Name` · `Impressions` · `Link Clicks` · `Landing Page Views` · `Amount Spent` (sem coluna de Checkout/Add to Cart nem Leads — ficam "-") |
+| **Leads** (fonte única de leads) | `1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I` | `Leads` | `Data/Hora` · `Nome` · `Telefone` · `Pontuação` (escore MQL) · `Procedimento` · `Origem` (nome do anúncio) · `Campanha` (raramente preenchida) |
+| **Agendamentos** | `1cOD2Sa9fp8TPJrBia7RY3br_Htg5pCJc5squzmLY4Dk` | `Planilha agendamento` | agregado **diário**: `Data` (DD/MM, sem ano) · `Agendamentos Confirmados` · `Cirurgias Confirmadas` · `Valor Total Cirurgias` |
 
-URL de export CSV: `https://docs.google.com/spreadsheets/d/<ID>/export?format=csv&gid=<GID>`
+> A aba **"Pontuação"** da planilha de Leads é um espelho exato da aba
+> "Leads" (mesmas linhas/colunas, incluindo a própria coluna "Pontuação") —
+> `build.py` lê direto da aba "Leads", não busca "Pontuação" à parte.
 
 ### Regra de Lead Qualificado (MQL)
-Coluna de qualificação (<<PREENCHER: nome da coluna de MQL, ex. "É médico?">>) == "Sim".
-Lógica em `build.py` → `is_medico`. O gráfico "Leads por especialidade" (`app.js`,
+Coluna **"Pontuação"** (aba Leads) **> 33**. Lógica em `build.py` →
+`is_qualified`. O gráfico "Leads por procedimento" (`app.js`,
 `renderGeralCore`) colore verde/cinza pelo mesmo critério, usando a coluna
-`Especialidades`/`Especialidade` como dimensão.
+`Procedimento` como dimensão (também usada em "Procedimentos mais buscados").
 
-### Vendas & Faturamento (cruzamento com Compradores)
-`build.py` → `build_sales_index()` lê a aba **New Subscriptions** e indexa por
-**telefone** (normalizado, só dígitos) → lista de compras **não agregada**,
-uma entrada por linha: `[{d, fat, receita}, ...]` (`d` = data real daquela
-compra). Em `process()`, as linhas da **Conversas** são ordenadas pela **data
-já parseada** (`parse_date`, não a string bruta) para achar a **1ª conversa**
-(mais antiga de fato) de cada telefone; essa conversa define **apenas**
-camp/adset/ad da venda (o anúncio que trouxe aquele contato) — nunca a data.
-Cada compra vira um registro próprio em `DATA.sales[]`
-(`{d, camp, adset, ad, vendas:1, fat, receita}`) com a **data real da compra**.
-No navegador, `salesActive()` (`app.js`) filtra `sales[]` pela mesma data ativa
-que `leadsActive()`/`metaActive()`, e os três arrays (`fL`/`fM`/`fS`) se
-propagam juntos em `buildAgg`/`daily`/`totals`.
+### Atribuição do anúncio (Leads → Campanha/Conjunto/Anúncio)
+A aba Leads não traz Campanha/Conjunto prontos por linha — a coluna
+**"Origem"** carrega o **nome do anúncio**, idêntico ao `Ad Name` do Meta Ads
+(confirmado: 100% de match nos dados reais). `build_ad_struct()` (`build.py`)
+cruza por esse nome e escolhe a combinação (Campanha, Conjunto) de **maior
+gasto** no Meta para aquele anúncio (um anúncio pode rodar em mais de um
+conjunto). Quando "Origem" está vazia, cai no fallback da coluna "Campanha"
+(quando preenchida) ou vira `(sem campanha)`/`src="org"`.
 
-**TODA venda entra na dash** (regra geral: "todas as vendas entram na Visão
-Geral; só as atribuídas ao Meta entram na aba de mídia paga"). O cruzamento
-Compradores × Conversas usa `canon_phone()` — **chave canônica** = DDD +
-últimos 8 dígitos, robusta a **DDI "55"** presente/ausente e ao **9º dígito**
-do celular. Quando o telefone bate com uma conversa, a venda recebe
-camp/adset/ad daquela conversa. Quando **não** bate, a venda **ainda conta nos
-totais/Visão Geral**, porém como `(sem campanha)` / `src="org"` — some apenas da
-quebra por campanha do Meta. `log_unmatched_sales()` loga no build quantas
-vendas ficaram sem anúncio de origem. **Não** usa as colunas `Compra Detectada`
-/ `Faturamento Detectado` já calculadas na planilha (decisão de projeto: cruzar
-do zero, mais robusto a erro de fórmula).
+### Agendamentos & Vendas/Faturamento (agregado diário, sem Compradores)
+Não há aba de Compradores/New Subscriptions neste cliente. `build.py` lê a
+planilha de **Agendamentos** — um agregado **diário** preenchido pelo
+comercial, **sem telefone/nome**, então **sem chave de atribuição por
+anúncio**. Vira `DATA.agenda[]` (`{d, agendamentos, vendas, fat}`, onde
+`vendas` = "Cirurgias Confirmadas" e `fat` = "Valor Total Cirurgias"). A coluna
+"Data" vem sem ano (ex. "09/07") — `build.py` assume o ano corrente do build
+e descarta linhas com data futura (linhas em branco pré-criadas para o resto
+do ano) e linhas totalmente zeradas.
+
+No navegador, `agendaActive()` (`app.js`) filtra `agenda[]` pela mesma data
+ativa dos outros arrays, e **só entra em `totals()`/`daily()`** (Visão Geral
+e Relatório — que espelha a Visão Geral) — **nunca em `buildAgg()`**, porque
+não há como atribuir a um anúncio. Por isso a aba de mídia paga (página 2) e
+o Top Anúncios (Relatório) mostram Agendamentos/Vendas/Faturamento como "-"
+(caem de volta ao critério de MQLs).
 
 ### Imposto da mídia paga
-`TAX_FACTOR` em `build.py` (`<<PREENCHER: fator, ex. 1.13806>>`). O toggle
-"Imposto Meta" fica **ativo por padrão** (`STATE.tax=true` em `app.js`) e aplica
-o fator em todo o gasto/derivados (CPL, CPMQL, CAC etc.); desativar o toggle
-volta ao gasto sem imposto. Se o cliente não tiver imposto, use `TAX_FACTOR = 1.0`.
+`TAX_FACTOR = 1.0` em `build.py` (sem imposto informado para este cliente). O
+toggle "Imposto Meta" fica **ativo por padrão** (`STATE.tax=true` em
+`app.js`); com `TAX_FACTOR = 1.0` o toggle não muda nada. Se o cliente
+informar um fator depois, edite a constante (ex. `1.13806` para 13,806%).
 
 ### Convenções de campanha (do cliente)
-Todas as campanhas usam o prefixo `<<PREENCHER: MAIN_PRODUCT_PREFIX>>`
-(`MAIN_PRODUCT_PREFIX`), sem filtrar por sub-funil — mantém TODAS as campanhas
-no dashboard. Ajuste o prefixo e, se o cliente usar siglas de etapa
-(ex. `<<PREENCHER: siglas de etapa, se houver>>`), documente-as aqui. A Conversas
-já traz `Campanha`/`Conjunto`/`Anúncio` prontos (nomes idênticos ao
-`Campaign Name`/`Ad Set Name`/`Ad Name` do Meta Ads) — `build.py` só copia esses
-valores, sem precisar de UTM nessa aba.
+Todas as campanhas observadas usam o prefixo `DR. VINICIUS | E2-CAP`
+(`MAIN_PRODUCT_PREFIX`) — só há UMA sigla de funil até agora (`E2-CAP`), com
+a etapa de tráfego `P2-FRIO` em todas as campanhas atuais (não incluída no
+prefixo, para não excluir futuras etapas P1/P3 se o cliente criar). O build
+não filtra por esse prefixo — mantém TODAS as campanhas no dashboard.
 
 ## Arquitetura / arquivos
 
 ```
-build/build.py            # lê os CSVs (read-only), emite REGISTROS BRUTOS (leads[]/meta[]/sales[]/ad_links); render() COSTURA os 4 arquivos abaixo
+build/build.py            # lê os CSVs (read-only) de 3 planilhas separadas, emite REGISTROS BRUTOS (leads[]/meta[]/agenda[]/ad_links); render() COSTURA os 4 arquivos abaixo
 build/template.html       # esqueleto HTML. Placeholders __STYLES__, __APP_JS__, __DATA_JSON__, __BUILD_ID__, __GENERATED_BRT__
 build/identidade-visual.css  # TODAS as cores (tema claro=padrão / escuro). Mexa AQUI p/ trocar só cor
 build/estilos.css         # layout/componentes (sidebar, topbar, period-picker, funil, tabelas, gráficos, aba Relatório)
@@ -196,9 +195,11 @@ como **fallback manual**. Limitação conhecida: usa os defaults de `build.py`
 editou no painel (fica em `localStorage`).
 
 Funil completo: `Impressões → Cliques → Leads → MQLs → Agendamentos → Reuniões
-Realizadas → Vendas → Faturamento`. Enquanto só houver mídia paga × Leads, o funil
-vai até MQL; Agendamentos/Reuniões/Vendas/Fat aparecem "-" até chegar a lista do
-comercial.
+Realizadas → Vendas → Faturamento`. Agendamentos/Vendas/Faturamento já vêm do
+agregado diário da planilha de Agendamentos (`DATA.agenda[]`) — acendem na
+Visão Geral/Relatório, mas ficam "-" na aba de mídia paga e no Top Anúncios
+(sem atribuição por anúncio). Reuniões Realizadas (No‑Show/CPRR) seguem "-" —
+a planilha não distingue agendado × comparecido.
 
 ### Link do criativo (aba de mídia paga)
 `build.py` lê uma coluna opcional de permalink do criativo na aba de mídia →
@@ -218,7 +219,7 @@ data, filtro cruzado, KPIs, tabelas, gráficos, heatmap, imposto) roda no navega
 ## Rodar/testar local
 
 ```bash
-python build/build.py --leads-file leads.csv --meta-file meta.csv --out dist/index.html
+python build/build.py --leads-file leads.csv --meta-file meta.csv --agenda-file agenda.csv --out dist/index.html
 # (o sandbox do agente NÃO alcança docs.google.com; use CSVs locais para testar.
 #  O runner do GitHub Actions tem internet e busca os CSVs ao vivo.)
 ```
@@ -227,8 +228,9 @@ python build/build.py --leads-file leads.csv --meta-file meta.csv --out dist/ind
 
 Três **páginas separadas** (sidebar):
 1. **Visão Geral de Leads** — funil vertical (Gasto → Impressões → Cliques → Leads →
-   MQLs → Vendas/Faturamento) + KPIs secundários; gráfico combinado diário +
-   tabela diária com heatmap (todos os leads); barras por origem/faixa/plataforma/profissão.
+   MQLs → Agendamentos → Vendas/Faturamento) + KPIs secundários; gráfico combinado
+   diário + tabela diária com heatmap (todos os leads); barras por origem/procedimento/
+   plataforma/procedimentos mais buscados.
 2. **Captura mídia paga** — funil em etapas; combinado diário; barras por utm_content;
    tabela diária com heatmap (só mídia paga); 3 tabelas hierárquicas Campanha →
    Conjunto → Anúncio, cada uma com gráfico de linha embaixo.
@@ -236,9 +238,10 @@ Três **páginas separadas** (sidebar):
    Anúncios (17 colunas + Status) + Insights de Tráfego. Ver `build/GUIA-RELATORIOS.md`.
 
 **Ordem das colunas nas tabelas:** `Data · Dia · Gasto · CPM · CTR · ConvForm · Leads ·
-CPL · Tx‑MQL · MQLs · CPMQL · ConvMQL · Vendas · CAC · Fat. · Receita · ROAS`. Nas
-tabelas diárias entram também **Checkouts** e **VisCHK** (da coluna "Adds to Cart"
-do Meta Ads, proxy de Checkout). Sem essas colunas, ficam "-".
+CPL · Tx‑MQL · MQLs · CPMQL · ConvMQL · Vendas · CAC · Fat. · Receita · ROAS`. Este
+cliente **não tem** coluna de Checkout/Add to Cart no Meta Ads — as colunas
+Checkouts/VisCHK foram removidas de `DAILY_COLS` (`app.js`) em vez de aparecerem
+sempre como "-".
 
 **Regras obrigatórias das tabelas** (ver `GUIA-REPLICACAO.md`): cabeçalho sticky;
 ordenação tri‑state; colunas redimensionáveis (persist localStorage); linha
@@ -246,9 +249,12 @@ ordenação tri‑state; colunas redimensionáveis (persist localStorage); linha
 filtro cruzado bidirecional; tabela diária com último dia no topo; heatmap de cor
 fixa por métrica.
 
-## Lacunas de dados (comuns até o cliente enviar mais fontes)
-- **Agendamentos / Reuniões Realizadas** → precisam da lista do comercial; aparecem "-".
-- **Page Views, CR, CPV, ConvLP** → precisam de uma fonte de page views.
+## Lacunas de dados
+- **Reuniões Realizadas / No‑Show** → a planilha de Agendamentos não distingue
+  agendado × comparecido; aparece "-" até vir essa distinção.
+- **Agendamentos/Vendas/Faturamento por campanha/anúncio** → a planilha de
+  Agendamentos é um agregado diário sem telefone; só entra na Visão Geral/
+  Relatório (totais), nunca na quebra por campanha (aba de mídia paga).
 - Enquanto não vierem, essas métricas aparecem como "-".
 
 ## Publicação — problemas conhecidos
