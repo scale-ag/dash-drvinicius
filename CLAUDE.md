@@ -75,7 +75,7 @@ abas) — `build.py` lê cada uma por **nome da aba**, via endpoint `gviz`
 
 | Planilha | ID | Aba | Colunas usadas |
 |-----|-----|-----|----------------|
-| **Meta Ads** | `1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ` | `Página 1` | `Day` · `Campaign Name` · `Ad Set Name` · `Ad Name` · `Impressions` · `Link Clicks` · `Landing Page Views` · `Amount Spent` (sem coluna de Checkout/Add to Cart nem Leads — ficam "-"). Essa planilha também tem uma aba `Página 2` (Day/Amount Spent/Reach/Impressions, sem Campaign Name) que **não é lida** — não dá pra atribuir a campanha/ENGJ×LEADS, e o cliente não pediu por ela ainda. |
+| **Meta Ads** | `1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ` | `Página 1` | `Day` · `Campaign Name` · `Ad Set Name` · `Ad Name` · `Impressions` · `Link Clicks` · `Landing Page Views` · `Amount Spent` · `Messaging Conversations Started` (leads de WhatsApp/ENGJ — ver abaixo) (sem coluna de Checkout/Add to Cart nem Leads — ficam "-"). Essa planilha também tem uma aba `Página 2` (Day/Amount Spent/Reach/Impressions, sem Campaign Name) que **não é lida** — não dá pra atribuir a campanha/ENGJ×LEADS, e o cliente não pediu por ela ainda. |
 | **Leads** (fonte única de leads) | `1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I` | `Sessões` | 1 linha por **sessão** do quiz/formulário de qualificação: `Início`/`Última atividade` · `Status` (`Em andamento`/`Enviou`/`Desqualificado`) · `Pontuação` (escore MQL) · `Origem` (nome do anúncio) · `Campanha` (raramente preenchida). Só linhas com `Status == "Enviou"` viram lead. |
 | **Agendamentos** | `1cOD2Sa9fp8TPJrBia7RY3br_Htg5pCJc5squzmLY4Dk` | `Planilha agendamento` | agregado **diário**: `Data` (DD/MM, sem ano) · `Agendamentos Confirmados` · `Cirurgias Confirmadas` · `Valor Total Cirurgias` |
 
@@ -98,11 +98,17 @@ origem" já distingue):
    "test", ex. `TEST_AD_123`/`TESTE_AD_VINI`) são descartadas.
 2. **WhatsApp/Engajamento** (`src="whatsapp"`) — campanhas do Meta Ads cujo
    `Campaign Name` contém **"ENGJ"** (`ENGAJAMENTO_TAG` em `build.py`) não
-   passam pelo quiz: o clique JÁ abre a conversa no WhatsApp, então cada
-   **Link Click** dessas campanhas vira **1 lead sintético** (sem nome/
-   telefone/pontuação — não dá pra qualificar um clique individual, `q=0`
-   sempre). Campanhas `LEADS|` (Quiz/LP) **não** geram lead sintético — esses
-   leads já entram via Sessões/Enviou, e contar os cliques também duplicaria.
+   passam pelo quiz: cada **"Messaging Conversations Started"** dessas
+   campanhas vira **1 lead sintético** (sem nome/telefone/pontuação — não dá
+   pra qualificar uma conversa individual, `q=0` sempre). Campanhas `LEADS|`
+   (Quiz/LP) **não** geram lead sintético — esses leads já entram via
+   Sessões/Enviou, e contar de novo também duplicaria.
+   > **Não usa Link Clicks** — nem todo clique vira conversa de fato:
+   > confirmado com o cliente que, no período 03/08–01/09/2026, Link Clicks
+   > somava 391 mas o resultado real da campanha no Ads Manager era 186
+   > conversas (quase 2× de diferença). O cliente adicionou a coluna
+   > "Messaging Conversations Started" na extração automática (app Adveronix,
+   > mesmo processo que já preenche `Página 1`) — sem trabalho manual diário.
 
 Como nenhuma das duas fontes atuais traz o procedimento de interesse
 (a aba Sessões não tem essa coluna — só a aba "Leads"/Agendamentos, que não
