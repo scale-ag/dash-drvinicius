@@ -77,11 +77,21 @@ try:
     names0 = list_sheet_names(SID_LEADS_ATUAL)
     print("  abas encontradas:", names0)
     for name in names0:
-        if name in ("Leads", "Pontuação"):
-            continue  # já inspecionadas antes — só quero as NOVAS
+        if name == "Leads":
+            continue  # já inspecionada antes
         try:
             rows = fetch_csv_by_name(SID_LEADS_ATUAL, name)
             show(f"aba '{name}'", rows)
+            if name == "Funil":
+                for r in rows[1:]:
+                    print(f"    {r}")
+            if name == "Sessões":
+                header = rows[0]
+                si = header.index("Status") if "Status" in header else None
+                if si is not None:
+                    from collections import Counter
+                    c = Counter((r[si] if len(r) > si else "").strip() for r in rows[1:])
+                    print("  contagem por Status:", dict(c))
         except Exception as e:
             print(f"  ERRO lendo aba '{name}': {e}", file=sys.stderr)
 except Exception as e:
