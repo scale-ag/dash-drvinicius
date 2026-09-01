@@ -111,7 +111,7 @@ function buildAgg(fL,fM,fS,dim){
 }
 function totals(fL,fM,fS,fA,fMO){
   let sp=0,im=0,cl=0,pv=0,chk=0; fM.forEach(r=>{sp+=r.sp;im+=r.im;cl+=r.cl;pv+=r.pv;chk+=r.ck||0;});
-  (fMO||[]).forEach(r=>{ sp+=r.sp||0; im+=r.im||0; cl+=r.cl||0; });
+  (fMO||[]).forEach(r=>{ sp+=r.sp||0; im+=r.im||0; cl+=r.cl||0; pv+=r.pv||0; });
   let agendamentos=0, vendas=fS.reduce((s,r)=>s+(r.vendas||0),0), fat=fS.reduce((s,r)=>s+(r.fat||0),0);
   (fA||[]).forEach(r=>{ agendamentos+=r.agendamentos||0; vendas+=r.vendas||0; fat+=r.fat||0; });
   return {sp, im, cl, pv, chk, leads:fL.length, mqls:fL.reduce((s,r)=>s+r.q,0),
@@ -123,7 +123,7 @@ function totals(fL,fM,fS,fA,fMO){
 function daily(fL,fM,fS,fA,fMO){
   const days={}; const g=d=>days[d]||(days[d]={d, sp:0,im:0,cl:0,pv:0,chk:0,leads:0,mqls:0,agendamentos:0,vendas:0,fat:0,receita:0});
   fM.forEach(r=>{if(!r.d)return; const a=g(r.d); a.sp+=r.sp; a.im+=r.im; a.cl+=r.cl; a.pv+=r.pv; a.chk+=r.ck||0;});
-  (fMO||[]).forEach(r=>{if(!r.d)return; const a=g(r.d); a.sp+=r.sp||0; a.im+=r.im||0; a.cl+=r.cl||0;});
+  (fMO||[]).forEach(r=>{if(!r.d)return; const a=g(r.d); a.sp+=r.sp||0; a.im+=r.im||0; a.cl+=r.cl||0; a.pv+=r.pv||0;});
   fL.forEach(r=>{if(!r.d)return; const a=g(r.d); a.leads+=1; a.mqls+=r.q;});
   fS.forEach(r=>{if(!r.d)return; const a=g(r.d); a.vendas+=r.vendas||0; a.fat+=r.fat||0; a.receita+=r.receita||0;});
   (fA||[]).forEach(r=>{if(!r.d)return; const a=g(r.d); a.agendamentos+=r.agendamentos||0; a.vendas+=r.vendas||0; a.fat+=r.fat||0;});

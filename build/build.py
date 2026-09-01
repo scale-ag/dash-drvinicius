@@ -26,16 +26,17 @@ SEPARADAS do cliente Dr. Vinicius:
     anuncio, entao so alimenta a Visao Geral/Relatorio (totals/daily), nunca a
     quebra por campanha/conjunto/anuncio da aba de midia paga.
   - Meta Ads, aba "Página 2" (mesma planilha do Meta Ads, gid 0/segunda aba):
-    Day/Amount Spent/Reach/Impressions/Link Clicks — SEM Campaign Name, entao
-    sem como atribuir a uma campanha/anuncio (é outro funil/conta, ex.
-    "E1-DIST", que o cliente confirmou nao ser o mesmo funil E2-CAP). Por
-    pedido do cliente, o Gasto/Impressões/Cliques dessa aba ENTRAM no total
-    da Visão Geral/Relatório (mesmo padrão do agenda[] — só totals()/daily()
-    no app.js), mas NUNCA na quebra por campanha/conjunto/anúncio da aba
-    "Captura Meta Ads" (que fica só com o que dá pra atribuir de fato, aba
-    "Página 1"). Link Clicks foi adicionado ao extrator depois do CTR/CPC da
-    Visão Geral terem ficado abaixo do gerenciador (conta "Todos os anúncios"
-    inclui a Página 2, mas a dash só somava cliques da Página 1).
+    outro funil/conta ("DR. VINICIUS | E1-DIST | ... | Alcance / Engajamento",
+    que o cliente confirmou nao ser o mesmo funil E2-CAP deste dashboard).
+    Traz Day/Campaign Name/Ad Set Name/Ad Name/Impressions/Landing Page
+    Views/Amount Spent/Link Clicks/Reach — ja atribuivel por campanha/anuncio,
+    MAS o cliente pediu que a quebra por campanha da aba "Captura Meta Ads"
+    fique so com o funil E2-CAP (aba "Página 1"): Gasto/Impressões/Cliques/
+    Landing Page Views da Página 2 ENTRAM apenas no total geral da Visão
+    Geral/Relatório (mesmo padrão do agenda[] — só totals()/daily() no
+    app.js), nunca na quebra por campanha/conjunto/anúncio. Sem Messaging
+    Conversations Started nem Pontuação — nao gera leads/MQL (é um funil de
+    Alcance/Engajamento de topo, nao de captura).
 
 Nota sobre a aba "Leads" (28 linhas) da planilha de Leads: e' na verdade um
 registro POR AGENDAMENTO (Procedimento/Atendimento/Decisao/Investimento,
@@ -300,15 +301,18 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows):
             "ml": to_float(cell(row, midx["leads"])),
         })
 
-    # "Página 2" — sem Campaign Name (outro funil/conta, não atribuível).
-    # Gasto/Impressões diários entram no total geral (DATA.meta_other[]),
-    # nunca na quebra por campanha/conjunto/anúncio (ver nota no topo).
+    # "Página 2" — outro funil (E1-DIST, Alcance/Engajamento), não o E2-CAP
+    # deste dashboard. Mesmo já trazendo Campaign Name/Ad Set Name/Ad Name,
+    # o cliente pediu que essas métricas fiquem só no total geral (Visão
+    # Geral/Relatório), nunca na quebra por campanha/conjunto/anúncio da aba
+    # "Captura Meta Ads" (que é específica do funil E2-CAP) — ver nota no topo.
     mo_header = meta_other_rows[0] if meta_other_rows else []
     mo_idx = header_index(
         mo_header,
         {"day": ["day", "data"], "spent": ["amount spent", "valor gasto", "gasto"],
          "impr": ["impressions", "impress"],
-         "clicks": ["link clicks", "clicks", "cliques"]},
+         "clicks": ["link clicks", "clicks", "cliques"],
+         "pv": ["landing page views", "page views", "pageviews"]},
         {"day": 0, "spent": 1, "impr": 3},
     )
     meta_other = []
@@ -323,6 +327,7 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows):
             "sp": round(to_float(cell(row, mo_idx["spent"])), 4),
             "im": to_float(cell(row, mo_idx["impr"])),
             "cl": to_float(cell(row, mo_idx["clicks"])),
+            "pv": to_float(cell(row, mo_idx["pv"])),
         })
 
     # Leads = 2 fontes distintas, mantidas separáveis por "src" (o gráfico
