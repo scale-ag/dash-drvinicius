@@ -4,21 +4,37 @@
 Gera a dashboard estatica (index.html) a partir de 3 planilhas Google Sheets
 SEPARADAS do cliente Dr. Vinicius:
 
-  - Leads (aba "Leads"): fonte UNICA de leads (formulario/atendimento). Coluna
+  - Leads (aba "Sessões"): fonte UNICA de leads — 1 linha por sessao do
+    quiz/formulario de qualificacao (nao por lead "fechado"). So contam como
+    lead as sessoes com Status == "Enviou" (completaram o formulario). Coluna
     "Pontuacao" (0-100) e o escore de qualificacao; MQL = Pontuacao > 33.
+    A aba "Leads" (28 linhas, com Procedimento/Atendimento/Decisao) NAO e
+    lida aqui — e na verdade um recorte de agendamentos, nao de leads (ver
+    nota abaixo).
   - Meta Ads (aba "Pagina 1"): investimento/impressoes/cliques/page views do
-    gerenciador de trafego.
+    gerenciador de trafego. Campanhas com "ENGJ" no nome sao de Engajamento/
+    WhatsApp (clique abre conversa direto, sem passar pelo quiz) — cada
+    Link Click dessas campanhas vira 1 lead sintetico (sem nome/pontuacao,
+    src="whatsapp"), SEM entrar no quiz/Sessões. Campanhas "LEADS|" (Quiz/LP)
+    NAO geram lead sintetico — esses leads ja vêm via Sessões/Enviou.
   - Agendamentos (aba "Planilha agendamento"): agregado DIARIO (nao por lead,
     sem telefone/nome) preenchido pelo comercial — Agendamentos Confirmados,
     Cirurgias Confirmadas e Valor Total Cirurgias. Sem chave de atribuicao por
     anuncio, entao so alimenta a Visao Geral/Relatorio (totals/daily), nunca a
     quebra por campanha/conjunto/anuncio da aba de midia paga.
 
-Atribuicao do anuncio de cada lead: a aba Leads nao traz Campanha/Conjunto
-prontos (só a coluna opcional "Campanha", raramente preenchida) — o vinculo
-confiavel e a coluna "Origem", que carrega o NOME DO ANUNCIO (igual ao "Ad
-Name" do Meta Ads). build_ad_struct() cruza por nome de anuncio -> escolhe a
-combinacao (Campanha, Conjunto) de maior gasto no Meta para aquele anuncio.
+Nota sobre a aba "Leads" (28 linhas) da planilha de Leads: e' na verdade um
+registro POR AGENDAMENTO (Procedimento/Atendimento/Decisao/Investimento,
+atribuido por anuncio via "Origem") — nao e' o volume bruto de leads. Como
+pode se sobrepor aos totais da planilha diaria de Agendamentos sem uma chave
+segura pra cruzar (nao ha telefone/data exata em comum confirmados), ela
+fica de fora do pipeline por enquanto — nao e' somada a leads[] nem a
+agenda[], pra nao contar nada em dobro.
+
+Atribuicao do anuncio de cada lead (Sessões): a coluna "Origem" carrega o
+NOME DO ANUNCIO (igual ao "Ad Name" do Meta Ads). build_ad_struct() cruza por
+nome de anuncio -> escolhe a combinacao (Campanha, Conjunto) de maior gasto
+no Meta para aquele anuncio.
 
 Nao ha aba de Compradores/New Subscriptions neste cliente — Vendas/Faturamento
 vêm do agregado diario de Agendamentos (Cirurgias Confirmadas = vendas), não
@@ -51,7 +67,10 @@ from datetime import datetime, timezone, timedelta
 SPREADSHEET_ID_META = "1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ"
 SHEET_META = "Página 1"
 SPREADSHEET_ID_LEADS = "1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I"
-SHEET_LEADS = "Leads"
+SHEET_LEADS = "Sessões"
+# Campanhas de Engajamento/WhatsApp (clique abre conversa direto, sem quiz) —
+# identificadas pela substring abaixo no Campaign Name do Meta Ads.
+ENGAJAMENTO_TAG = "ENGJ"
 SPREADSHEET_ID_AGENDA = "1cOD2Sa9fp8TPJrBia7RY3br_Htg5pCJc5squzmLY4Dk"
 SHEET_AGENDA = "Planilha agendamento"
 # gviz por NOME da aba (nao pelo gid) — funciona independente de qual posicao
@@ -144,7 +163,7 @@ def parse_date(v: str) -> str | None:
     m = re.match(r"(\d{4})-(\d{2})-(\d{2})", s)
     if m:
         return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
-    # aba Leads traz "Data/Hora" (ex. "8/11/2026 14:57:19") — descarta a hora
+    # aba Sessões traz "Início"/"Última atividade" com hora (ex. "8/11/2026 14:57:19") — descarta a hora
     s_date = s.split(" ")[0]
     for fmt in ("%m/%d/%Y", "%d/%m/%Y", "%d/%m/%y", "%b %d, %Y", "%Y/%m/%d"):
         try:
@@ -154,30 +173,9 @@ def parse_date(v: str) -> str | None:
     return None
 
 
-def is_test_lead(rowtext: str) -> bool:
-    return "<test lead" in rowtext.lower()
-
-
 def is_qualified(v: str | None) -> bool:
-    """Critério de MQL deste cliente: coluna "Pontuação" (aba Leads) > 33."""
+    """Critério de MQL deste cliente: coluna "Pontuação" (aba Sessões) > 33."""
     return to_float(v) > 33
-
-
-def pretty_specialty(v: str) -> str:
-    s = (v or "").strip()
-    return s if s else "Sem resposta"
-
-
-def mask_phone(p: str) -> str:
-    digits = re.sub(r"\D", "", p or "")
-    return f"…{digits[-4:]}" if len(digits) >= 4 else "—"
-
-
-def first_last_initial(name: str) -> str:
-    parts = (name or "").strip().split()
-    if not parts:
-        return "—"
-    return parts[0] if len(parts) == 1 else f"{parts[0]} {parts[-1][:1]}."
 
 
 def valid_utm(campaign: str) -> bool:
@@ -215,7 +213,7 @@ def cell(row, i):
 # Anúncio -> (campanha, conjunto) dominante por gasto (Meta Ads)
 # --------------------------------------------------------------------------- #
 def build_ad_struct(meta_rows, midx):
-    """A aba Leads não traz Campanha/Conjunto prontos por linha — só o nome do
+    """A aba Sessões não traz Campanha/Conjunto prontos por linha — só o nome do
     anúncio (coluna "Origem", que bate com o "Ad Name" do Meta). Aqui cruzamos
     por nome de anúncio e escolhemos a combinação (Campanha, Conjunto) de MAIOR
     GASTO no Meta para aquele anúncio (um anúncio pode rodar em mais de um
@@ -280,24 +278,37 @@ def process(leads_rows, meta_rows, agenda_rows):
             "ml": to_float(cell(row, midx["leads"])),
         })
 
+    # Leads = 2 fontes distintas, mantidas separáveis por "src" (o gráfico
+    # "Leads por origem" do app.js já separa por esse campo):
+    #   1) aba "Sessões" (quiz/LP) — só Status == "Enviou" (completou o
+    #      formulário); é aí que mora a Pontuação (MQL).
+    #   2) campanhas de Engajamento/WhatsApp (Campaign Name contém "ENGJ") —
+    #      não passam pelo quiz; cada Link Click vira 1 lead sintético
+    #      (sem pontuação — não dá pra qualificar um clique individual).
     lheader = leads_rows[0] if leads_rows else []
     lidx = header_index(
         lheader,
-        {"created": ["data/hora", "data"], "phone": ["telefone"], "name": ["nome"],
-         "score": ["pontuacao"], "procedimento": ["procedimento"],
-         "campanha": ["campanha"], "origem": ["origem"]},
-        {"created": 0, "name": 1, "phone": 2, "score": 4, "procedimento": 5, "origem": 12, "campanha": 16},
+        {"start": ["início", "inicio"], "last": ["última atividade", "ultima atividade"],
+         "status": ["status"], "score": ["pontuação", "pontuacao"],
+         "campanha": ["campanha"], "origem": ["origem"], "ad_id": ["ad_id"]},
+        {"start": 1, "last": 2, "status": 5, "score": 7, "origem": 11, "campanha": 12, "ad_id": 8},
     )
+
+    def is_test_session(origem, campanha, ad_id):
+        blob = f"{origem} {campanha} {ad_id}".lower()
+        return "test" in blob
 
     leads = []
     for row in leads_rows[1:]:
         if not any((c or "").strip() for c in row):
             continue
-        rowtext = " ".join(str(c) for c in row)
-        if is_test_lead(rowtext):
+        if cell(row, lidx["status"]) != "Enviou":
             continue
         origem = cell(row, lidx["origem"])
         campanha_col = cell(row, lidx["campanha"])
+        ad_id = cell(row, lidx["ad_id"])
+        if is_test_session(origem, campanha_col, ad_id):
+            continue
         struct = ad_struct.get(origem) if origem else None
         if struct:
             camp, adset, ad, src = struct["camp"], struct["adset"], origem, "meta"
@@ -305,22 +316,44 @@ def process(leads_rows, meta_rows, agenda_rows):
             camp, adset, ad, src = campanha_col, "(sem conjunto)", (origem or "(sem anúncio)"), "meta"
         else:
             camp, adset, ad, src = "(sem campanha)", "(sem conjunto)", "(sem anúncio)", "org"
-        procedimento = pretty_specialty(cell(row, lidx["procedimento"]))
         leads.append({
-            "d": parse_date(cell(row, lidx["created"])),
+            "d": parse_date(cell(row, lidx["last"]) or cell(row, lidx["start"])),
             "src": src,
             "plat": "ig" if src == "meta" else "—",
             "camp": camp,
             "adset": adset,
             "ad": ad,
-            "prof": procedimento,
-            "bucket": procedimento,
+            "prof": "Sem resposta",
+            "bucket": "Sem resposta",
             "q": 1 if is_qualified(cell(row, lidx["score"])) else 0,
             "utm": 1 if src == "meta" else 0,
-            "nm": first_last_initial(cell(row, lidx["name"])),
+            "nm": "—",
             "em": "—",
-            "ph": mask_phone(cell(row, lidx["phone"])),
+            "ph": "—",
         })
+
+    # Leads de Engajamento/WhatsApp: 1 lead sintético por Link Click, só nas
+    # campanhas de Engajamento (não duplica quem já entra via Sessões/Enviou,
+    # pois essas pessoas não passam pelo quiz — o clique JÁ é o lead).
+    for row in meta_rows[1:]:
+        if not any((c or "").strip() for c in row):
+            continue
+        camp = cell(row, midx["campaign"])
+        if ENGAJAMENTO_TAG not in camp:
+            continue
+        n_clicks = round(to_float(cell(row, midx["clicks"])))
+        if n_clicks <= 0:
+            continue
+        d = parse_date(cell(row, midx["day"]))
+        adset = cell(row, midx["adset"]) or "(sem conjunto)"
+        ad = cell(row, midx["ad"]) or "(sem anúncio)"
+        for _ in range(n_clicks):
+            leads.append({
+                "d": d, "src": "whatsapp", "plat": "ig",
+                "camp": camp, "adset": adset, "ad": ad,
+                "prof": "Sem resposta", "bucket": "Sem resposta",
+                "q": 0, "utm": 1, "nm": "—", "em": "—", "ph": "—",
+            })
 
     # Agendamentos: agregado DIÁRIO preenchido pelo comercial (sem telefone/nome,
     # sem atribuição por anúncio) — só entra em totals()/daily() no app.js
@@ -435,7 +468,7 @@ def render(data, template_path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--leads-file", help="CSV local da aba Leads (fonte única de leads)")
+    ap.add_argument("--leads-file", help="CSV local da aba Sessões (fonte única de leads via quiz/LP)")
     ap.add_argument("--meta-file", help="CSV local da aba Meta Ads (Página 1)")
     ap.add_argument("--agenda-file", help="CSV local da aba Planilha agendamento")
     ap.add_argument("--template", default="build/template.html")
@@ -459,11 +492,13 @@ def main():
 
     b = data["build"]
     q = sum(l["q"] for l in data["leads"])
+    n_quiz = sum(1 for l in data["leads"] if l["src"] != "whatsapp")
+    n_wa = sum(1 for l in data["leads"] if l["src"] == "whatsapp")
     vd = sum(a["vendas"] for a in data["agenda"])
     fat = sum(a["fat"] for a in data["agenda"])
     print("== build ok ==", file=sys.stderr)
     print(f"  periodo   : {b['date_min']} -> {b['date_max']}", file=sys.stderr)
-    print(f"  leads     : {len(data['leads'])}  MQLs (Pontuação > 33): {q}", file=sys.stderr)
+    print(f"  leads     : {len(data['leads'])} (quiz/LP: {n_quiz}  whatsapp: {n_wa})  MQLs (Pontuação > 33): {q}", file=sys.stderr)
     print(f"  agenda    : {len(data['agenda'])} dias com dado  vendas: {vd}  faturamento: R$ {fat:,.2f}", file=sys.stderr)
     print(f"  meta      : {len(data['meta'])} linhas", file=sys.stderr)
     print(f"  out       : {args.out}", file=sys.stderr)

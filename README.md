@@ -1,9 +1,10 @@
 # Dashboard de Captura de Leads · Dr. Vinícius
 
 Dashboard **100% na nuvem** do Funil de High Ticket de **Dr. Vinícius** que
-cruza a aba **Leads** (formulário/atendimento) com o investimento de mídia
-paga (**Meta Ads**) e com a planilha diária de **Agendamentos** (preenchida
-pelo comercial), calcula os **Leads Qualificados (MQLs)** e é publicada no
+cruza a aba **Sessões** (quiz/formulário de qualificação) e os cliques das
+campanhas de WhatsApp/Engajamento com o investimento de mídia paga
+(**Meta Ads**) e com a planilha diária de **Agendamentos** (preenchida pelo
+comercial), calcula os **Leads Qualificados (MQLs)** e é publicada no
 **GitHub Pages**. Reconstrói sozinha a cada ~30 min, disparada pelo
 **cron-job.org** — sem depender de nenhum PC ligado.
 
@@ -24,7 +25,9 @@ pelo comercial), calcula os **Leads Qualificados (MQLs)** e é publicada no
 
 ## Critério de Lead Qualificado (MQL)
 
-Coluna **"Pontuação"** (aba Leads) **> 33**. Lógica em `build.py` → `is_qualified`.
+Coluna **"Pontuação"** (aba Sessões) **> 33**. Lógica em `build.py` → `is_qualified`.
+Só se aplica aos leads de Quiz/LP — leads de WhatsApp/Engajamento (cliques)
+não têm pontuação individual (ver abaixo).
 
 ## Fontes de dados (somente leitura)
 
@@ -33,14 +36,18 @@ não depende de gid):
 
 | Planilha | Aba | Uso |
 |-----|-----|-----|
-| Meta Ads | `Página 1` | gasto, impressões, cliques, page views |
-| Leads | `Leads` | fonte **única** de leads — Data/Hora, Nome, Telefone, Pontuação (MQL), Procedimento, Origem (nome do anúncio) |
+| Meta Ads | `Página 1` | gasto, impressões, cliques, page views. Campanhas com **"ENGJ"** no nome = WhatsApp/Engajamento: cada clique vira 1 lead |
+| Leads | `Sessões` | fonte de leads do Quiz/LP — 1 linha por sessão; só `Status == "Enviou"` vira lead. Traz Pontuação (MQL), Origem (nome do anúncio) |
 | Agendamentos | `Planilha agendamento` | agregado **diário** do comercial — Agendamentos Confirmados, Cirurgias Confirmadas, Valor Total Cirurgias (sem telefone/atribuição por anúncio) |
 
 O build lê essas abas via **export CSV público** (`gviz/tq?tqx=out:csv&sheet=...`).
 **Nada é escrito de volta** nas planilhas.
 
-Atribuição do anúncio de cada lead: a coluna **"Origem"** da aba Leads traz o
+> Existe também uma aba **"Leads"** na planilha de Sessões (28 linhas) que,
+> apesar do nome, é um registro por **agendamento** (não é lida pelo build —
+> ver `CLAUDE.md`).
+
+Atribuição do anúncio de cada lead: a coluna **"Origem"** da aba Sessões traz o
 nome do anúncio (igual ao "Ad Name" do Meta Ads) — `build.py` cruza por esse
 nome e herda Campanha/Conjunto do Meta (maior gasto, se o anúncio rodou em
 mais de um conjunto).

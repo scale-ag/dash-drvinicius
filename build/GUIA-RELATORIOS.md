@@ -87,7 +87,7 @@ preenchida pelo comercial — sem atribuição por anúncio).
 Impressões → Cliques → Leads → MQLs → Agendamentos → Vendas (Cirurgias) → Faturamento
 ```
 
-- **MQL** = coluna "Pontuação" (aba Leads) > 33 (ver `build.py` → `is_qualified`).
+- **MQL** = coluna "Pontuação" (aba Sessões, só `Status == "Enviou"`) > 33 (ver `build.py` → `is_qualified`).
 - **Agendamento** = o lead qualificado marcou horário de reunião com o comercial.
 - **Reunião Realizada** = a reunião de fato aconteceu (o lead compareceu). O
   inverso disso é o **No‑Show** (agendou e não compareceu) — a métrica de alerta

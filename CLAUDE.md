@@ -75,28 +75,52 @@ abas) — `build.py` lê cada uma por **nome da aba**, via endpoint `gviz`
 
 | Planilha | ID | Aba | Colunas usadas |
 |-----|-----|-----|----------------|
-| **Meta Ads** | `1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ` | `Página 1` | `Day` · `Campaign Name` · `Ad Set Name` · `Ad Name` · `Impressions` · `Link Clicks` · `Landing Page Views` · `Amount Spent` (sem coluna de Checkout/Add to Cart nem Leads — ficam "-") |
-| **Leads** (fonte única de leads) | `1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I` | `Leads` | `Data/Hora` · `Nome` · `Telefone` · `Pontuação` (escore MQL) · `Procedimento` · `Origem` (nome do anúncio) · `Campanha` (raramente preenchida) |
+| **Meta Ads** | `1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ` | `Página 1` | `Day` · `Campaign Name` · `Ad Set Name` · `Ad Name` · `Impressions` · `Link Clicks` · `Landing Page Views` · `Amount Spent` (sem coluna de Checkout/Add to Cart nem Leads — ficam "-"). Essa planilha também tem uma aba `Página 2` (Day/Amount Spent/Reach/Impressions, sem Campaign Name) que **não é lida** — não dá pra atribuir a campanha/ENGJ×LEADS, e o cliente não pediu por ela ainda. |
+| **Leads** (fonte única de leads) | `1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I` | `Sessões` | 1 linha por **sessão** do quiz/formulário de qualificação: `Início`/`Última atividade` · `Status` (`Em andamento`/`Enviou`/`Desqualificado`) · `Pontuação` (escore MQL) · `Origem` (nome do anúncio) · `Campanha` (raramente preenchida). Só linhas com `Status == "Enviou"` viram lead. |
 | **Agendamentos** | `1cOD2Sa9fp8TPJrBia7RY3br_Htg5pCJc5squzmLY4Dk` | `Planilha agendamento` | agregado **diário**: `Data` (DD/MM, sem ano) · `Agendamentos Confirmados` · `Cirurgias Confirmadas` · `Valor Total Cirurgias` |
 
-> A aba **"Pontuação"** da planilha de Leads é um espelho exato da aba
-> "Leads" (mesmas linhas/colunas, incluindo a própria coluna "Pontuação") —
-> `build.py` lê direto da aba "Leads", não busca "Pontuação" à parte.
+> ⚠️ **Não confundir** com a aba **"Leads"** (28 linhas, mesma planilha de
+> Sessões) — apesar do nome, ela é na verdade um registro **por agendamento**
+> (Procedimento/Atendimento/Decisão/Investimento, atribuído por anúncio via
+> "Origem"), preenchido pelo comercial depois do contato. **Não é lida** pelo
+> `build.py` — pode se sobrepor aos totais da planilha diária de Agendamentos
+> sem uma chave segura pra cruzar (nem telefone nem data exata em comum
+> confirmados), então fica de fora do pipeline por enquanto (nem leads[], nem
+> agenda[], pra não contar nada em dobro). Se o cliente quiser uma visão
+> "Agendamentos por anúncio" a partir dela, é feature nova a pedir.
 
-### Regra de Lead Qualificado (MQL)
-Coluna **"Pontuação"** (aba Leads) **> 33**. Lógica em `build.py` →
-`is_qualified`. O gráfico "Leads por procedimento" (`app.js`,
-`renderGeralCore`) colore verde/cinza pelo mesmo critério, usando a coluna
-`Procedimento` como dimensão (também usada em "Procedimentos mais buscados").
+### Regra de Lead Qualificado (MQL) e fontes de Leads
+Duas fontes de Leads, mantidas **separadas por `src`** (o gráfico "Leads por
+origem" já distingue):
+1. **Quiz/LP** (`src="meta"`/`"org"`) — aba **Sessões**, só `Status == "Enviou"`
+   (completou o formulário). MQL = coluna **"Pontuação" > 33** (`build.py` →
+   `is_qualified`). Linhas de teste (`ad_id`/`Origem`/`Campanha` contendo
+   "test", ex. `TEST_AD_123`/`TESTE_AD_VINI`) são descartadas.
+2. **WhatsApp/Engajamento** (`src="whatsapp"`) — campanhas do Meta Ads cujo
+   `Campaign Name` contém **"ENGJ"** (`ENGAJAMENTO_TAG` em `build.py`) não
+   passam pelo quiz: o clique JÁ abre a conversa no WhatsApp, então cada
+   **Link Click** dessas campanhas vira **1 lead sintético** (sem nome/
+   telefone/pontuação — não dá pra qualificar um clique individual, `q=0`
+   sempre). Campanhas `LEADS|` (Quiz/LP) **não** geram lead sintético — esses
+   leads já entram via Sessões/Enviou, e contar os cliques também duplicaria.
 
-### Atribuição do anúncio (Leads → Campanha/Conjunto/Anúncio)
-A aba Leads não traz Campanha/Conjunto prontos por linha — a coluna
+Como nenhuma das duas fontes atuais traz o procedimento de interesse
+(a aba Sessões não tem essa coluna — só a aba "Leads"/Agendamentos, que não
+é lida), os campos `prof`/`bucket` ficam fixos em `"Sem resposta"`; os
+gráficos "Leads por procedimento" e "Procedimentos mais buscados" (`app.js`)
+mostram isso até existir uma fonte com o procedimento por lead.
+
+### Atribuição do anúncio (Sessões → Campanha/Conjunto/Anúncio)
+A aba Sessões não traz Campanha/Conjunto prontos por linha (`ad_id`/
+`adset_id`/`campaign_id` vêm sempre vazios nos dados reais) — a coluna
 **"Origem"** carrega o **nome do anúncio**, idêntico ao `Ad Name` do Meta Ads
-(confirmado: 100% de match nos dados reais). `build_ad_struct()` (`build.py`)
+(confirmado: ~87% de match nos dados reais). `build_ad_struct()` (`build.py`)
 cruza por esse nome e escolhe a combinação (Campanha, Conjunto) de **maior
 gasto** no Meta para aquele anúncio (um anúncio pode rodar em mais de um
 conjunto). Quando "Origem" está vazia, cai no fallback da coluna "Campanha"
-(quando preenchida) ou vira `(sem campanha)`/`src="org"`.
+(quando preenchida) ou vira `(sem campanha)`/`src="org"`. Os leads sintéticos
+de WhatsApp/Engajamento já vêm com Campanha/Conjunto/Anúncio exatos da
+própria linha do Meta Ads — não precisam desse cruzamento.
 
 ### Agendamentos & Vendas/Faturamento (agregado diário, sem Compradores)
 Não há aba de Compradores/New Subscriptions neste cliente. `build.py` lê a
