@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Inspeção única (temporária) das 3 planilhas do cliente Dr Vinícius.
-Roda no runner do GitHub Actions (tem internet); imprime estrutura nos logs
-e salva os CSVs brutos em build/_inspect_out/ para virarem artifact.
-NÃO faz parte do pipeline definitivo — arquivo/workflow removidos depois.
+"""Inspeção única (temporária) das 3 planilhas do cliente Dr Vinícius — v2,
+com estatísticas extra (datas min/max, preenchimento de colunas, overlap
+Origem x Ad Name). Roda no runner do GitHub Actions (tem internet); imprime
+estrutura nos logs. NÃO faz parte do pipeline definitivo — removido depois.
 """
 import csv
 import io
-import os
 import re
 import sys
 import urllib.parse
@@ -28,7 +27,7 @@ def fetch(sid, sheet_name):
     req = urllib.request.Request(url, headers={"User-Agent": "inspect-bot/1.0"})
     with urllib.request.urlopen(req, timeout=60) as r:
         raw = r.read().decode("utf-8", errors="replace")
-    return list(csv.reader(io.StringIO(raw))), raw
+    return list(csv.reader(io.StringIO(raw)))
 
 
 def mask_row(header, row):
@@ -41,60 +40,88 @@ def mask_row(header, row):
     return out
 
 
-def show(label, key, rows):
-    print(f"\n=== {label} ===")
-    if not rows:
-        print("  (vazio ou aba não encontrada)")
-        return
-    header = rows[0]
-    print(f"  linhas de dados: {len(rows) - 1}")
-    print(f"  colunas ({len(header)}):")
-    for i, h in enumerate(header):
-        print(f"    [{i}] {h!r}")
-    for r in rows[1:4]:
-        print(f"  amostra: {mask_row(header, r)}")
-
-
-os.makedirs("build/_inspect_out", exist_ok=True)
-
 all_rows = {}
 for key, label, sid, sheet in SOURCES:
     try:
-        rows, raw = fetch(sid, sheet)
-        all_rows[key] = rows
-        show(label, key, rows)
-        with open(f"build/_inspect_out/{key}.csv", "w", encoding="utf-8") as f:
-            f.write(raw)
+        all_rows[key] = fetch(sid, sheet)
+        print(f"OK  {label}: {len(all_rows[key])-1} linhas", file=sys.stderr)
     except Exception as e:
-        print(f"\n=== {label} === ERRO: {e}", file=sys.stderr)
+        print(f"ERRO {label}: {e}", file=sys.stderr)
         all_rows[key] = []
 
-# Campaign Name únicos (Meta Ads) -> candidatos a sigla do funil
-meta_rows = all_rows.get("meta_pagina1") or []
-if meta_rows:
-    header = meta_rows[0]
-    idx = None
-    for i, h in enumerate(header):
-        hn = h.strip().lower()
-        if hn == "campaign name" or ("campaign" in hn and "name" in hn):
-            idx = i
-            break
-    if idx is not None:
-        names = sorted({r[idx] for r in meta_rows[1:] if len(r) > idx and r[idx]})
-        print(f"\n=== Campaign Name únicos ({len(names)}) ===")
-        for n in names:
-            print(f"  {n!r}")
-        # tenta extrair prefixo comum (primeiro token separado por espaço/-/_/|)
-        prefixes = {}
-        for n in names:
-            m = re.match(r"^([A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)?)", n)
-            if m:
-                prefixes.setdefault(m.group(1), 0)
-                prefixes[m.group(1)] += 1
-        print("\n=== Prefixos candidatos (1º token) ===")
-        for p, c in sorted(prefixes.items(), key=lambda x: -x[1]):
-            print(f"  {p!r}: {c} campanha(s)")
-    else:
-        print("\n=== Campaign Name: coluna não encontrada ===")
+leads = all_rows.get("leads_leads") or []
+meta = all_rows.get("meta_pagina1") or []
+agenda = all_rows.get("agenda") or []
 
-print("\n== fim da inspeção ==")
+# ---- Leads: preenchimento por coluna + range de datas + valores de Pontuação
+if leads:
+    header = leads[0]
+    rows = leads[1:]
+    print("\n=== Leads: preenchimento por coluna (não-vazias / total) ===")
+    for i, h in enumerate(header):
+        nonempty = sum(1 for r in rows if len(r) > i and (r[i] or "").strip())
+        print(f"  [{i}] {h!r}: {nonempty}/{len(rows)}")
+    di = header.index("Data/Hora") if "Data/Hora" in header else 0
+    dates = sorted(r[di] for r in rows if len(r) > di and r[di])
+    print(f"  Data/Hora min: {dates[0] if dates else '-'}  max: {dates[-1] if dates else '-'}")
+    pi = header.index("Pontuação") if "Pontuação" in header else 4
+    scores = [r[pi] for r in rows if len(r) > pi and r[pi]]
+    print(f"  Pontuação amostra (todas): {scores}")
+    oi = header.index("Origem") if "Origem" in header else None
+    if oi is not None:
+        origins = sorted({r[oi] for r in rows if len(r) > oi and r[oi]})
+        print(f"\n  Origem — valores únicos ({len(origins)}):")
+        for o in origins:
+            print(f"    {o!r}")
+    ci = header.index("Campanha") if "Campanha" in header else None
+    if ci is not None:
+        camps = sorted({r[ci] for r in rows if len(r) > ci and r[ci]})
+        print(f"  Campanha (coluna) — valores únicos não-vazios: {camps}")
+
+# ---- Meta: range de datas + Ad Set Name / Ad Name únicos
+if meta:
+    header = meta[0]
+    rows = meta[1:]
+    di = header.index("Day") if "Day" in header else 0
+    dates = sorted(r[di] for r in rows if len(r) > di and r[di])
+    print(f"\n=== Meta Ads: Day min: {dates[0] if dates else '-'}  max: {dates[-1] if dates else '-'} ===")
+    ani = header.index("Ad Name") if "Ad Name" in header else None
+    asni = header.index("Ad Set Name") if "Ad Set Name" in header else None
+    if ani is not None:
+        ad_names = sorted({r[ani] for r in rows if len(r) > ani and r[ani]})
+        print(f"  Ad Name — valores únicos ({len(ad_names)}):")
+        for a in ad_names:
+            print(f"    {a!r}")
+    if asni is not None:
+        adset_names = sorted({r[asni] for r in rows if len(r) > asni and r[asni]})
+        print(f"  Ad Set Name — valores únicos ({len(adset_names)}):")
+        for a in adset_names:
+            print(f"    {a!r}")
+    # overlap Origem (Leads) x Ad Name (Meta)
+    if leads and oi is not None and ani is not None:
+        origins_set = {r[oi] for r in leads[1:] if len(r) > oi and r[oi]}
+        adnames_set = {r[ani] for r in rows if len(r) > ani and r[ani]}
+        print(f"\n  Overlap Origem(Leads) x Ad Name(Meta): {len(origins_set & adnames_set)} / {len(origins_set)} origens batem")
+        print(f"  Origens SEM match: {sorted(origins_set - adnames_set)}")
+
+# ---- Agendamentos: range de datas, preenchimento, linhas com cirurgia>0
+if agenda:
+    header = agenda[0]
+    rows = agenda[1:]
+    print(f"\n=== Agendamentos: preenchimento por coluna ({len(rows)} linhas) ===")
+    for i, h in enumerate(header):
+        nonempty = sum(1 for r in rows if len(r) > i and (r[i] or "").strip())
+        print(f"  [{i}] {h!r}: {nonempty}/{len(rows)}")
+    dts = [r[0] for r in rows if r and r[0]]
+    print(f"  Data primeira linha: {dts[0] if dts else '-'}   última linha: {dts[-1] if dts else '-'}")
+    ci = header.index("Cirurgias Confirmadas") if "Cirurgias Confirmadas" in header else 4
+    vi = header.index("Valor Total Cirurgias") if "Valor Total Cirurgias" in header else 6
+    pi2 = header.index("Pacientes") if "Pacientes" in header else 8
+    nonzero = [(r[0], r[ci], r[vi]) for r in rows if len(r) > ci and re.sub(r"[^\d]", "", r[ci] or "") not in ("", "0")]
+    print(f"  Linhas com Cirurgias Confirmadas > 0: {len(nonzero)}")
+    for d, c, v in nonzero[:8]:
+        print(f"    {d}: cirurgias={c!r} valor_total={v!r}")
+    pac = [r[pi2] for r in rows if len(r) > pi2 and (r[pi2] or "").strip()]
+    print(f"  'Pacientes' preenchido em {len(pac)} linha(s); amostra mascarada: {[p[:2]+'***' for p in pac[:5]]}")
+
+print("\n== fim da inspeção v2 ==")
