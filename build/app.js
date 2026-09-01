@@ -545,7 +545,7 @@ function renderGeral(){ renderGeralCore(GERAL_IDS); }
 function renderGeralCore(ids){
   const fL=leadsActive(), fM=metaActive(), fS=salesActive(), fA=agendaActive();
   const t=totals(fL,fM,fS,fA), dv=derive(t), g=dv.gasto;
-  const leadsAds=fL.filter(l=>l.src==='meta'||l.src==='google');
+  const leadsAds=fL.filter(l=>l.src==='meta'||l.src==='google'||l.src==='whatsapp');
   const nAds=leadsAds.length, mqlsAds=leadsAds.reduce((s,r)=>s+r.q,0);
   const nOrg=fL.filter(l=>l.src==='org').length;
   const semUtm=fL.filter(l=>!l.utm).length, comUtm=t.leads-semUtm;
@@ -589,7 +589,7 @@ function renderGeralCore(ids){
   document.getElementById(ids.kpis2).innerHTML=k2.map(kpiCard).join('');
   comboChart(ids.combo, daily(fL,fM,fS,fA));
   // por origem
-  const srcName={meta:'Meta Ads',google:'Google Ads',org:'Orgânico',outros:'Outros'};
+  const srcName={meta:'Meta Ads (Quiz/LP)',google:'Google Ads',whatsapp:'WhatsApp (Engajamento)',org:'Orgânico',outros:'Outros'};
   const bySrc={}; fL.forEach(l=>{const k=srcName[l.src]||l.src; bySrc[k]=(bySrc[k]||0)+1;});
   hbar(ids.source, Object.entries(bySrc).map(([label,leads])=>({label,leads})), x=>x.leads, ()=>cvar('--chart-leads'));
   // por procedimento (verde = MQL/qualificado, cinza = não qualificado; "Sem resposta" sempre por último)

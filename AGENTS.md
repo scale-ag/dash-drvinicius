@@ -13,7 +13,7 @@
 1. **`build/build.py` — constantes do topo:** `SPREADSHEET_ID_META`/`SHEET_META`,
    `SPREADSHEET_ID_LEADS`/`SHEET_LEADS`, `SPREADSHEET_ID_AGENDA`/`SHEET_AGENDA`,
    `CLIENT_NAME`, `MAIN_PRODUCT`, `MAIN_PRODUCT_PREFIX`, `TAX_FACTOR`.
-2. **Critério de MQL:** `is_qualified()` — coluna "Pontuação" (aba Leads) > 33.
+2. **Critério de MQL:** `is_qualified()` — coluna "Pontuação" (aba Sessões, só linhas `Status == "Enviou"`) > 33.
 3. **`build/app.js`:** rótulos `'MQLs (Pontuação > 33)'` e agrupamento por
    "Procedimento" (não "especialidade/profissão" — este funil é de paciente,
    não de médico).
