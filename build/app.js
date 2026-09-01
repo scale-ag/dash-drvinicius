@@ -1,6 +1,6 @@
 "use strict";
 const DATA = JSON.parse(document.getElementById('payload').textContent);
-const LEADS = DATA.leads, META = DATA.meta, SALES = DATA.sales||[], AGENDA = DATA.agenda||[], B = DATA.build;
+const LEADS = DATA.leads, META = DATA.meta, SALES = DATA.sales||[], AGENDA = DATA.agenda||[], META_OTHER = DATA.meta_other||[], B = DATA.build;
 const TAX = B.tax_factor || 1.0;
 
 /* ---------------- format ---------------- */
@@ -48,6 +48,12 @@ const salesActive = ()=> SALES.filter(s=>dateActive(s.d));
    e do Relatório (renderGeralCore), nunca na quebra por campanha/conjunto/
    anúncio da aba de mídia paga (metaScope/buildAgg). */
 const agendaActive = ()=> AGENDA.filter(a=>dateActive(a.d));
+/* meta_other: "Página 2" do Meta Ads (gasto/impressões sem Campaign Name —
+   outro funil/conta, não atribuível). Por pedido do cliente entra no Gasto/
+   Impressões da Visão Geral e do Relatório (mesmo padrão do agenda[] — só
+   totals()/daily()), nunca na quebra por campanha/conjunto/anúncio da aba
+   de mídia paga (metaScope/buildAgg/renderMeta). */
+const metaOtherActive = ()=> META_OTHER.filter(m=>dateActive(m.d));
 
 /* ---------------- aggregation ---------------- */
 function derive(a){
@@ -103,8 +109,9 @@ function buildAgg(fL,fM,fS,dim){
   fS.forEach(r=>{const a=get(r[dim]); a.vendas+=r.vendas||0; a.fat+=r.fat||0; a.receita+=r.receita||0;});
   return m;
 }
-function totals(fL,fM,fS,fA){
+function totals(fL,fM,fS,fA,fMO){
   let sp=0,im=0,cl=0,pv=0,chk=0; fM.forEach(r=>{sp+=r.sp;im+=r.im;cl+=r.cl;pv+=r.pv;chk+=r.ck||0;});
+  (fMO||[]).forEach(r=>{ sp+=r.sp||0; im+=r.im||0; });
   let agendamentos=0, vendas=fS.reduce((s,r)=>s+(r.vendas||0),0), fat=fS.reduce((s,r)=>s+(r.fat||0),0);
   (fA||[]).forEach(r=>{ agendamentos+=r.agendamentos||0; vendas+=r.vendas||0; fat+=r.fat||0; });
   return {sp, im, cl, pv, chk, leads:fL.length, mqls:fL.reduce((s,r)=>s+r.q,0),
@@ -113,9 +120,10 @@ function totals(fL,fM,fS,fA){
 }
 /* daily aggregation for a source pair. `d` (data da venda) é a data REAL da
    compra (aba Compradores), não a data da conversa — ver build.py::process. */
-function daily(fL,fM,fS,fA){
+function daily(fL,fM,fS,fA,fMO){
   const days={}; const g=d=>days[d]||(days[d]={d, sp:0,im:0,cl:0,pv:0,chk:0,leads:0,mqls:0,agendamentos:0,vendas:0,fat:0,receita:0});
   fM.forEach(r=>{if(!r.d)return; const a=g(r.d); a.sp+=r.sp; a.im+=r.im; a.cl+=r.cl; a.pv+=r.pv; a.chk+=r.ck||0;});
+  (fMO||[]).forEach(r=>{if(!r.d)return; const a=g(r.d); a.sp+=r.sp||0; a.im+=r.im||0;});
   fL.forEach(r=>{if(!r.d)return; const a=g(r.d); a.leads+=1; a.mqls+=r.q;});
   fS.forEach(r=>{if(!r.d)return; const a=g(r.d); a.vendas+=r.vendas||0; a.fat+=r.fat||0; a.receita+=r.receita||0;});
   (fA||[]).forEach(r=>{if(!r.d)return; const a=g(r.d); a.agendamentos+=r.agendamentos||0; a.vendas+=r.vendas||0; a.fat+=r.fat||0;});
@@ -543,8 +551,8 @@ const GERAL_IDS={funnel:'geralFunnel',kpis2:'geralKpis2',combo:'gCombo',source:'
 const REL_IDS  ={funnel:'relFunnel', kpis2:'relKpis2', combo:'rCombo',source:'rSource',bucket:'rBucket',plat:'rPlat',prof:'rProf',daily:'rDaily'};
 function renderGeral(){ renderGeralCore(GERAL_IDS); }
 function renderGeralCore(ids){
-  const fL=leadsActive(), fM=metaActive(), fS=salesActive(), fA=agendaActive();
-  const t=totals(fL,fM,fS,fA), dv=derive(t), g=dv.gasto;
+  const fL=leadsActive(), fM=metaActive(), fS=salesActive(), fA=agendaActive(), fMO=metaOtherActive();
+  const t=totals(fL,fM,fS,fA,fMO), dv=derive(t), g=dv.gasto;
   const leadsAds=fL.filter(l=>l.src==='meta'||l.src==='google'||l.src==='whatsapp');
   const nAds=leadsAds.length, mqlsAds=leadsAds.reduce((s,r)=>s+r.q,0);
   const nOrg=fL.filter(l=>l.src==='org').length;
@@ -565,7 +573,7 @@ function renderGeralCore(ids){
   ];
   document.getElementById(ids.funnel).innerHTML=funnelHTML(steps);
   // ---- Mar05: métricas secundárias mais úteis (não repetem o funil) ----
-  const dd=daily(fL,fM,fS,fA), nDays=dd.length||1;
+  const dd=daily(fL,fM,fS,fA,fMO), nDays=dd.length||1;
   const adAgg=buildAgg(fL,fM,fS,'ad');
   let topAd=null, bestAd=null, nAdsAtivos=0;
   Object.entries(adAgg).forEach(([ad,a])=>{
@@ -587,7 +595,7 @@ function renderGeralCore(ids){
     {label:'Proporção Org:Ads',val:nOrg?numf(nAds/nOrg)+':1':(nAds?'∞':'-'),aux:'Ads por orgânico'},
   ];
   document.getElementById(ids.kpis2).innerHTML=k2.map(kpiCard).join('');
-  comboChart(ids.combo, daily(fL,fM,fS,fA));
+  comboChart(ids.combo, daily(fL,fM,fS,fA,fMO));
   // por origem
   const srcName={meta:'Meta Ads (Quiz/LP)',google:'Google Ads',whatsapp:'WhatsApp (Engajamento)',org:'Orgânico',outros:'Outros'};
   const bySrc={}; fL.forEach(l=>{const k=srcName[l.src]||l.src; bySrc[k]=(bySrc[k]||0)+1;});
@@ -604,7 +612,7 @@ function renderGeralCore(ids){
   const byPr={}; fL.forEach(l=>{byPr[l.prof]=(byPr[l.prof]||0)+1;});
   hbar(ids.prof, Object.entries(byPr).map(([label,leads])=>({label,leads})), x=>x.leads, ()=>cvar('--chart-mqls'), 10);
   // tabela diaria (todos os leads), ultimo dia no topo + heatmap
-  const dl=daily(fL,fM,fS,fA).slice().reverse();
+  const dl=daily(fL,fM,fS,fA,fMO).slice().reverse();
   renderTable({id:ids.daily, cols:DAILY_COLS, center:true, fit:true,
     rows:dl.map(x=>{const d=derive(x); return {k:x.d, cells:dailyCells(x,d)};}),
     total:(()=>{const d=derive(t);return dailyCells({...t,d:null},d,true);})(),

@@ -36,7 +36,8 @@ não depende de gid):
 
 | Planilha | Aba | Uso |
 |-----|-----|-----|
-| Meta Ads | `Página 1` | gasto, impressões, cliques, page views. Campanhas com **"ENGJ"** no nome = WhatsApp/Engajamento: cada clique vira 1 lead |
+| Meta Ads | `Página 1` | gasto, impressões, cliques, page views. Campanhas com **"ENGJ"** no nome = WhatsApp/Engajamento: cada "Messaging Conversations Started" vira 1 lead |
+| Meta Ads | `Página 2` | gasto/impressões sem Campaign Name (outro funil/conta) — entra só no total geral (Visão Geral/Relatório), nunca na quebra por campanha |
 | Leads | `Sessões` | fonte de leads do Quiz/LP — 1 linha por sessão; só `Status == "Enviou"` vira lead. Traz Pontuação (MQL), Origem (nome do anúncio) |
 | Agendamentos | `Planilha agendamento` | agregado **diário** do comercial — Agendamentos Confirmados, Cirurgias Confirmadas, Valor Total Cirurgias (sem telefone/atribuição por anúncio) |
 
