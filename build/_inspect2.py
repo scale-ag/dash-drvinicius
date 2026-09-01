@@ -68,8 +68,24 @@ def show(label, rows):
 
 
 SID_META_ATUAL = "1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ"
+SID_LEADS_ATUAL = "1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I"
 SID_AGENDA = "1cOD2Sa9fp8TPJrBia7RY3br_Htg5pCJc5squzmLY4Dk"
 AGENDA_GID_APONTADO = "654429203"
+
+print(f"\n=== Abas da planilha de Leads {SID_LEADS_ATUAL} (até agora: 'Leads' + 'Pontuação') ===")
+try:
+    names0 = list_sheet_names(SID_LEADS_ATUAL)
+    print("  abas encontradas:", names0)
+    for name in names0:
+        if name in ("Leads", "Pontuação"):
+            continue  # já inspecionadas antes — só quero as NOVAS
+        try:
+            rows = fetch_csv_by_name(SID_LEADS_ATUAL, name)
+            show(f"aba '{name}'", rows)
+        except Exception as e:
+            print(f"  ERRO lendo aba '{name}': {e}", file=sys.stderr)
+except Exception as e:
+    print(f"ERRO ao listar abas: {e}", file=sys.stderr)
 
 print(f"\n=== Abas da planilha {SID_META_ATUAL} (até agora usada só como Meta Ads) ===")
 try:
