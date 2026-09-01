@@ -25,6 +25,14 @@ SEPARADAS do cliente Dr. Vinicius:
     Cirurgias Confirmadas e Valor Total Cirurgias. Sem chave de atribuicao por
     anuncio, entao so alimenta a Visao Geral/Relatorio (totals/daily), nunca a
     quebra por campanha/conjunto/anuncio da aba de midia paga.
+  - Meta Ads, aba "Página 2" (mesma planilha do Meta Ads, gid 0/segunda aba):
+    Day/Amount Spent/Reach/Impressions — SEM Campaign Name, entao sem como
+    atribuir a uma campanha/anuncio (é outro funil/conta, ex. "E1-DIST", que
+    o cliente confirmou nao ser o mesmo funil E2-CAP). Por pedido do cliente,
+    o Gasto/Impressões dessa aba ENTRAM no total da Visão Geral/Relatório
+    (mesmo padrão do agenda[] — só totals()/daily() no app.js), mas NUNCA na
+    quebra por campanha/conjunto/anúncio da aba "Captura Meta Ads" (que fica
+    só com o que dá pra atribuir de fato, aba "Página 1").
 
 Nota sobre a aba "Leads" (28 linhas) da planilha de Leads: e' na verdade um
 registro POR AGENDAMENTO (Procedimento/Atendimento/Decisao/Investimento,
@@ -45,13 +53,13 @@ de cruzamento por telefone.
 
 Este script apenas LE as planilhas (export CSV publico, via gviz por NOME da
 aba — nao depende de gid) e emite os REGISTROS BRUTOS (leads[], meta[],
-agenda[]) dentro do HTML. Todos os filtros, agregacoes, KPIs, tabelas e
-graficos sao calculados no navegador (client-side). Nunca escreve nada de
-volta nas planilhas.
+agenda[], meta_other[]) dentro do HTML. Todos os filtros, agregacoes, KPIs,
+tabelas e graficos sao calculados no navegador (client-side). Nunca escreve
+nada de volta nas planilhas.
 
-Teste local: --leads-file / --meta-file / --agenda-file apontando para CSVs
-baixados (o sandbox do agente nao alcanca docs.google.com; o runner do
-GitHub Actions alcanca).
+Teste local: --leads-file / --meta-file / --agenda-file / --meta-other-file
+apontando para CSVs baixados (o sandbox do agente nao alcanca
+docs.google.com; o runner do GitHub Actions alcanca).
 """
 from __future__ import annotations
 
@@ -69,6 +77,10 @@ from datetime import datetime, timezone, timedelta
 
 SPREADSHEET_ID_META = "1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ"
 SHEET_META = "Página 1"
+# 2ª aba da mesma planilha de Meta Ads — sem Campaign Name (outro funil/conta,
+# não atribuível). Gasto/Impressões entram no total geral, nunca na quebra
+# por campanha (ver nota no topo do arquivo).
+SHEET_META_OTHER = "Página 2"
 SPREADSHEET_ID_LEADS = "1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I"
 SHEET_LEADS = "Sessões"
 # Campanhas de Engajamento/WhatsApp (clique abre conversa direto, sem quiz) —
@@ -242,7 +254,7 @@ def build_ad_struct(meta_rows, midx):
 # --------------------------------------------------------------------------- #
 # Processamento -> registros brutos
 # --------------------------------------------------------------------------- #
-def process(leads_rows, meta_rows, agenda_rows):
+def process(leads_rows, meta_rows, agenda_rows, meta_other_rows):
     mheader = meta_rows[0] if meta_rows else []
     midx = header_index(
         mheader,
@@ -283,6 +295,29 @@ def process(leads_rows, meta_rows, agenda_rows):
             "pv": to_float(cell(row, midx["pv"])),
             "ck": to_float(cell(row, midx["chk"])),
             "ml": to_float(cell(row, midx["leads"])),
+        })
+
+    # "Página 2" — sem Campaign Name (outro funil/conta, não atribuível).
+    # Gasto/Impressões diários entram no total geral (DATA.meta_other[]),
+    # nunca na quebra por campanha/conjunto/anúncio (ver nota no topo).
+    mo_header = meta_other_rows[0] if meta_other_rows else []
+    mo_idx = header_index(
+        mo_header,
+        {"day": ["day", "data"], "spent": ["amount spent", "valor gasto", "gasto"],
+         "impr": ["impressions", "impress"]},
+        {"day": 0, "spent": 1, "impr": 3},
+    )
+    meta_other = []
+    for row in meta_other_rows[1:]:
+        if not any((c or "").strip() for c in row):
+            continue
+        d = parse_date(cell(row, mo_idx["day"]))
+        if not d:
+            continue
+        meta_other.append({
+            "d": d,
+            "sp": round(to_float(cell(row, mo_idx["spent"])), 4),
+            "im": to_float(cell(row, mo_idx["impr"])),
         })
 
     # Leads = 2 fontes distintas, mantidas separáveis por "src" (o gráfico
@@ -403,6 +438,7 @@ def process(leads_rows, meta_rows, agenda_rows):
 
     dates = sorted({d for d in (
         [l["d"] for l in leads if l["d"]] + [m["d"] for m in meta if m["d"]] + [a["d"] for a in agenda if a["d"]]
+        + [m["d"] for m in meta_other if m["d"]]
     )})
     return {
         "build": {
@@ -424,6 +460,7 @@ def process(leads_rows, meta_rows, agenda_rows):
         "meta": meta,
         "sales": [],   # sem aba de Compradores neste cliente — vendas vêm de agenda[]
         "agenda": agenda,
+        "meta_other": meta_other,   # "Página 2" — só totals()/daily(), nunca buildAgg()
         "ad_links": ad_links,
         # Insights de Tráfego (texto pré-escrito, lido de relatorios.json). Preenchido
         # em main() via load_briefings(); fica {} se relatorios.json não existir.
@@ -482,6 +519,7 @@ def main():
     ap.add_argument("--leads-file", help="CSV local da aba Sessões (fonte única de leads via quiz/LP)")
     ap.add_argument("--meta-file", help="CSV local da aba Meta Ads (Página 1)")
     ap.add_argument("--agenda-file", help="CSV local da aba Planilha agendamento")
+    ap.add_argument("--meta-other-file", help="CSV local da aba Página 2 (gasto/impressões sem atribuição de campanha)")
     ap.add_argument("--template", default="build/template.html")
     ap.add_argument("--out", default="dist/index.html")
     args = ap.parse_args()
@@ -489,8 +527,9 @@ def main():
     meta_rows = load_rows(sheet_url(SPREADSHEET_ID_META, SHEET_META), args.meta_file)
     leads_rows = load_rows(sheet_url(SPREADSHEET_ID_LEADS, SHEET_LEADS), args.leads_file)
     agenda_rows = load_rows(sheet_url(SPREADSHEET_ID_AGENDA, SHEET_AGENDA), args.agenda_file)
+    meta_other_rows = load_rows(sheet_url(SPREADSHEET_ID_META, SHEET_META_OTHER), args.meta_other_file)
 
-    data = process(leads_rows, meta_rows, agenda_rows)
+    data = process(leads_rows, meta_rows, agenda_rows, meta_other_rows)
 
     # Insights de Tráfego (texto pré-escrito) — lidos do arquivo versionado ao
     # lado do template. Sem chamada de API no build.
@@ -512,6 +551,8 @@ def main():
     print(f"  leads     : {len(data['leads'])} (quiz/LP: {n_quiz}  whatsapp: {n_wa})  MQLs (Pontuação > 33): {q}", file=sys.stderr)
     print(f"  agenda    : {len(data['agenda'])} dias com dado  vendas: {vd}  faturamento: R$ {fat:,.2f}", file=sys.stderr)
     print(f"  meta      : {len(data['meta'])} linhas", file=sys.stderr)
+    mo_sp = sum(m["sp"] for m in data["meta_other"])
+    print(f"  meta_other: {len(data['meta_other'])} linhas  gasto: R$ {mo_sp:,.2f} (só entra no total geral)", file=sys.stderr)
     print(f"  out       : {args.out}", file=sys.stderr)
 
 
