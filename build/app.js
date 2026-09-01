@@ -553,10 +553,6 @@ function renderGeral(){ renderGeralCore(GERAL_IDS); }
 function renderGeralCore(ids){
   const fL=leadsActive(), fM=metaActive(), fS=salesActive(), fA=agendaActive(), fMO=metaOtherActive();
   const t=totals(fL,fM,fS,fA,fMO), dv=derive(t), g=dv.gasto;
-  const leadsAds=fL.filter(l=>l.src==='meta'||l.src==='google'||l.src==='whatsapp');
-  const nAds=leadsAds.length, mqlsAds=leadsAds.reduce((s,r)=>s+r.q,0);
-  const nOrg=fL.filter(l=>l.src==='org').length;
-  const semUtm=fL.filter(l=>!l.utm).length, comUtm=t.leads-semUtm;
   const NA='<span class="na-tag">sem dado</span>';
   const s=salesOf(t);
   const steps=[
@@ -590,9 +586,6 @@ function renderGeralCore(ids){
     {label:'Top anúncio (MQLs)',val:topAd?intf(topAd.m):'-',aux:topAd?adShort(topAd.ad):'—'},
     {label:'Concentração top anúncio',val:pct(concTop),aux:'% dos MQLs no melhor anúncio'},
     {label:'Anúncios ativos',val:intf(nAdsAtivos),aux:intf(nCampAtivas)+' campanhas c/ gasto'},
-    {label:'% Eficácia Rastr.',val:pct(t.leads?comUtm/t.leads:null),aux:'Leads c/ UTM / Leads'},
-    {label:'Leads Orgânicos',val:intf(nOrg),aux:'sem fonte paga'},
-    {label:'Proporção Org:Ads',val:nOrg?numf(nAds/nOrg)+':1':(nAds?'∞':'-'),aux:'Ads por orgânico'},
   ];
   document.getElementById(ids.kpis2).innerHTML=k2.map(kpiCard).join('');
   comboChart(ids.combo, daily(fL,fM,fS,fA,fMO));

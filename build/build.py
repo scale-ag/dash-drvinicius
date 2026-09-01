@@ -367,7 +367,12 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows):
         elif valid_utm(campanha_col):
             camp, adset, ad, src = campanha_col, "(sem conjunto)", (origem or "(sem anúncio)"), "meta"
         else:
-            camp, adset, ad, src = "(sem campanha)", "(sem conjunto)", "(sem anúncio)", "org"
+            # Sessão sem Origem/Campanha reconhecida (orgânico/direto, sem
+            # clique de anúncio pra atribuir) — cliente pediu que o total de
+            # Leads bata com o Ads Manager (que só enxerga o que veio de
+            # clique), então essas sessões NÃO entram em leads[] (nem no
+            # total, nem no funil, nem nas MQLs).
+            continue
         leads.append({
             "d": parse_date(cell(row, lidx["last"]) or cell(row, lidx["start"])),
             "src": src,

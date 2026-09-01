@@ -93,10 +93,19 @@ abas) — `build.py` lê cada uma por **nome da aba**, via endpoint `gviz`
 ### Regra de Lead Qualificado (MQL) e fontes de Leads
 Duas fontes de Leads, mantidas **separadas por `src`** (o gráfico "Leads por
 origem" já distingue):
-1. **Quiz/LP** (`src="meta"`/`"org"`) — aba **Sessões**, só `Status == "Enviou"`
-   (completou o formulário). MQL = coluna **"Pontuação" > 33** (`build.py` →
-   `is_qualified`). Linhas de teste (`ad_id`/`Origem`/`Campanha` contendo
-   "test", ex. `TEST_AD_123`/`TESTE_AD_VINI`) são descartadas.
+1. **Quiz/LP** (`src="meta"`) — aba **Sessões**, só `Status == "Enviou"`
+   (completou o formulário) **E** com Origem/Campanha reconhecida (atribuível
+   a um anúncio do Meta — ver seção seguinte). MQL = coluna **"Pontuação" > 33**
+   (`build.py` → `is_qualified`). Linhas de teste (`ad_id`/`Origem`/`Campanha`
+   contendo "test", ex. `TEST_AD_123`/`TESTE_AD_VINI`) são descartadas.
+   > Sessões sem Origem/Campanha reconhecida (orgânico/direto, sem clique de
+   > anúncio pra atribuir) **não entram em `leads[]`** — o cliente pediu que
+   > o total de Leads bata com o Ads Manager (que só enxerga o que veio de
+   > clique). Confirmado no período 03/08–01/09/2026: 220 → 215 leads batendo
+   > exatamente com o gerenciador (25 da campanha LEADS| + 190 da ENGJ) ao
+   > excluir as 4 sessões sem atribuição (`src` cairia em "org", removido).
+   > Efeito colateral aceito pelo cliente: sessões reais que preencheram o
+   > formulário mas não têm clique rastreável deixam de contar em Leads/MQLs.
 2. **WhatsApp/Engajamento** (`src="whatsapp"`) — campanhas do Meta Ads cujo
    `Campaign Name` contém **"ENGJ"** (`ENGAJAMENTO_TAG` em `build.py`) não
    passam pelo quiz: cada **"Messaging Conversations Started"** dessas
@@ -125,8 +134,9 @@ A aba Sessões não traz Campanha/Conjunto prontos por linha (`ad_id`/
 cruza por esse nome e escolhe a combinação (Campanha, Conjunto) de **maior
 gasto** no Meta para aquele anúncio (um anúncio pode rodar em mais de um
 conjunto). Quando "Origem" está vazia, cai no fallback da coluna "Campanha"
-(quando preenchida) ou vira `(sem campanha)`/`src="org"`. Os leads sintéticos
-de WhatsApp/Engajamento já vêm com Campanha/Conjunto/Anúncio exatos da
+(quando preenchida); sem nenhuma das duas, a sessão é **descartada** (não
+entra em `leads[]` — ver nota acima). Os leads sintéticos de WhatsApp/
+Engajamento já vêm com Campanha/Conjunto/Anúncio exatos da
 própria linha do Meta Ads — não precisam desse cruzamento.
 
 ### Agendamentos & Vendas/Faturamento (agregado diário, sem Compradores)

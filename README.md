@@ -27,7 +27,9 @@ comercial), calcula os **Leads Qualificados (MQLs)** e é publicada no
 
 Coluna **"Pontuação"** (aba Sessões) **> 33**. Lógica em `build.py` → `is_qualified`.
 Só se aplica aos leads de Quiz/LP — leads de WhatsApp/Engajamento (cliques)
-não têm pontuação individual (ver abaixo).
+não têm pontuação individual (ver abaixo). Sessões sem Origem/Campanha
+reconhecida (orgânico/direto, sem clique de anúncio pra atribuir) não contam
+como Lead — o total bate com o Ads Manager.
 
 ## Fontes de dados (somente leitura)
 
