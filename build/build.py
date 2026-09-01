@@ -14,9 +14,12 @@ SEPARADAS do cliente Dr. Vinicius:
   - Meta Ads (aba "Pagina 1"): investimento/impressoes/cliques/page views do
     gerenciador de trafego. Campanhas com "ENGJ" no nome sao de Engajamento/
     WhatsApp (clique abre conversa direto, sem passar pelo quiz) — cada
-    Link Click dessas campanhas vira 1 lead sintetico (sem nome/pontuacao,
-    src="whatsapp"), SEM entrar no quiz/Sessões. Campanhas "LEADS|" (Quiz/LP)
-    NAO geram lead sintetico — esses leads ja vêm via Sessões/Enviou.
+    "Messaging Conversations Started" dessas campanhas vira 1 lead sintetico
+    (sem nome/pontuacao, src="whatsapp"), SEM entrar no quiz/Sessões. NAO usa
+    Link Clicks — nem todo clique vira conversa de fato (confirmado com o
+    cliente: clique superestima em quase 2x o resultado real do Ads Manager).
+    Campanhas "LEADS|" (Quiz/LP) NAO geram lead sintetico — esses leads ja
+    vêm via Sessões/Enviou.
   - Agendamentos (aba "Planilha agendamento"): agregado DIARIO (nao por lead,
     sem telefone/nome) preenchido pelo comercial — Agendamentos Confirmados,
     Cirurgias Confirmadas e Valor Total Cirurgias. Sem chave de atribuicao por
@@ -250,6 +253,10 @@ def process(leads_rows, meta_rows, agenda_rows):
          # Este cliente não tem coluna de Checkout/Add to Cart no Meta Ads —
          # fica None (a UI mostra "-").
          "chk": ["adds to cart", "add to cart", "initiate checkout", "checkouts iniciados", "checkouts"],
+         # Resultado real das campanhas de Engajamento/WhatsApp (adicionada
+         # pelo cliente no extrator) — usado no lugar de Link Clicks pra não
+         # superestimar (nem todo clique vira conversa de fato).
+         "msg_conv": ["messaging conversations started", "conversas por mensagem", "conversas iniciadas"],
          "link": ["creative instagram permalink", "instagram permalink", "permalink",
                   "creative link", "link do anuncio", "link do criativo"]},
         {"day": 0, "campaign": 1, "adset": 2, "ad": 3, "impr": 4, "clicks": 5, "pv": 6, "spent": 7},
@@ -283,8 +290,8 @@ def process(leads_rows, meta_rows, agenda_rows):
     #   1) aba "Sessões" (quiz/LP) — só Status == "Enviou" (completou o
     #      formulário); é aí que mora a Pontuação (MQL).
     #   2) campanhas de Engajamento/WhatsApp (Campaign Name contém "ENGJ") —
-    #      não passam pelo quiz; cada Link Click vira 1 lead sintético
-    #      (sem pontuação — não dá pra qualificar um clique individual).
+    #      não passam pelo quiz; cada "Messaging Conversations Started" vira
+    #      1 lead sintético (sem pontuação — não dá pra qualificar 1 a 1).
     lheader = leads_rows[0] if leads_rows else []
     lidx = header_index(
         lheader,
@@ -332,22 +339,26 @@ def process(leads_rows, meta_rows, agenda_rows):
             "ph": "—",
         })
 
-    # Leads de Engajamento/WhatsApp: 1 lead sintético por Link Click, só nas
-    # campanhas de Engajamento (não duplica quem já entra via Sessões/Enviou,
-    # pois essas pessoas não passam pelo quiz — o clique JÁ é o lead).
+    # Leads de Engajamento/WhatsApp: 1 lead sintético por conversa iniciada
+    # ("Messaging Conversations Started", coluna adicionada pelo cliente no
+    # extrator), só nas campanhas de Engajamento (não duplica quem já entra
+    # via Sessões/Enviou, pois essas pessoas não passam pelo quiz). NÃO usa
+    # Link Clicks — nem todo clique vira conversa de fato (confirmado: no
+    # período 03/08–01/09/2026, Link Clicks somava 391 mas o resultado real
+    # da campanha no Ads Manager era 186 conversas — quase 2× de diferença).
     for row in meta_rows[1:]:
         if not any((c or "").strip() for c in row):
             continue
         camp = cell(row, midx["campaign"])
         if ENGAJAMENTO_TAG not in camp:
             continue
-        n_clicks = round(to_float(cell(row, midx["clicks"])))
-        if n_clicks <= 0:
+        n_leads = round(to_float(cell(row, midx["msg_conv"])))
+        if n_leads <= 0:
             continue
         d = parse_date(cell(row, midx["day"]))
         adset = cell(row, midx["adset"]) or "(sem conjunto)"
         ad = cell(row, midx["ad"]) or "(sem anúncio)"
-        for _ in range(n_clicks):
+        for _ in range(n_leads):
             leads.append({
                 "d": d, "src": "whatsapp", "plat": "ig",
                 "camp": camp, "adset": adset, "ad": ad,
