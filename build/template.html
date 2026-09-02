@@ -20,7 +20,9 @@
     <div class="logo"><div class="logo-main">Dr. Vinícius</div><div class="logo-sub">E2-CAP</div></div>
     <div class="sec">Dashboards</div>
     <div class="nav-item active" data-page="geral"><span class="ic">◱</span> Visão Geral de Leads</div>
-    <div class="nav-item" data-page="meta"><span class="ic">◨</span> Captura Meta Ads</div>
+    <div class="nav-item" data-page="quiz"><span class="ic">◨</span> Funil Quiz/LP</div>
+    <div class="nav-item" data-page="whatsapp"><span class="ic">◧</span> Funil WhatsApp/Engajamento</div>
+    <div class="nav-item" data-page="perfil"><span class="ic">◫</span> Funil Visitas ao Perfil</div>
     <div class="nav-item" data-page="rel"><span class="ic">▤</span> Relatório</div>
     <div class="foot">Somente leitura · atualiza ~30 min<br><span id="buildFoot"></span></div>
   </aside>
@@ -89,64 +91,165 @@
         </div>
       </div>
 
-      <!-- ===================== PÁGINA 2: CAPTURA META ADS ===================== -->
-      <div class="page" id="page-meta">
-        <h2 class="sec-title">Funil de tráfego pago (Meta Ads) &amp; combinação diária</h2>
+      <!-- ===================== PÁGINA 2: FUNIL QUIZ/LP ===================== -->
+      <div class="page" id="page-quiz">
+        <h2 class="sec-title">Funil Quiz/LP (Meta Ads) &amp; combinação diária</h2>
         <div class="grid funnel-grid">
-          <div class="card"><div class="funnel" id="metaFunnel"></div>
-            <p class="note">A planilha de Agendamentos é um agregado diário, sem atribuição por anúncio — por isso Agendamentos/Vendas/Faturamento aparecem “-” aqui (só entram na Visão Geral e no Relatório).</p>
+          <div class="card"><div class="funnel" id="qzFunnel"></div>
+            <p class="note">Só campanhas "LEADS|" (Quiz/LP) do funil E2-CAP — sem misturar com WhatsApp/Engajamento ou Visitas ao Perfil. A planilha de Agendamentos é um agregado diário, sem atribuição por anúncio — por isso Agendamentos/Vendas/Faturamento aparecem “-” aqui (só entram na Visão Geral e no Relatório).</p>
           </div>
           <div class="panel">
-            <div class="panel-chart"><h3>Combinação diária</h3><p class="hint">Leads/MQLs (barras) · Gasto (linha vermelha) · CPL (linha) · CPMQL (linha amarela)</p><div class="chart-box"><canvas id="mCombo"></canvas></div></div>
-            <div class="tbl-wrap tbl-normal"><table class="dt" id="tDaily"></table></div>
-            <p class="note" style="padding:10px 15px 12px">Fonte: cruzamento Meta‑Ads. Heatmap por coluna (Gasto · Leads · MQLs) · último dia no topo · clique numa data para filtrar (Ctrl = várias). Valores em R$.</p>
+            <div class="panel-chart"><h3>Combinação diária</h3><p class="hint">Leads/MQLs (barras) · Gasto (linha vermelha) · CPL (linha) · CPMQL (linha amarela)</p><div class="chart-box"><canvas id="qzCombo"></canvas></div></div>
+            <div class="tbl-wrap tbl-normal"><table class="dt" id="qzDaily"></table></div>
+            <p class="note" style="padding:10px 15px 12px">Fonte: cruzamento Meta‑Ads (só Quiz/LP). Heatmap por coluna (Gasto · Leads · MQLs) · último dia no topo · clique numa data para filtrar (Ctrl = várias). Valores em R$.</p>
           </div>
         </div>
 
         <h2 class="sec-title">Anúncios · MQLs · qualificação · CAC</h2>
         <div class="trio">
-          <div class="card"><h3>MQLs por anúncio</h3><p class="hint">Top 10 · utm_content</p><div class="chart-box chart-sm"><canvas id="mMqlAd"></canvas></div></div>
-          <div class="card"><h3>Taxa de qualificação por anúncio</h3><p class="hint">Verde = MQL (Pontuação &gt; 33) · vermelho = desqualificado</p><div class="donut-wrap"><canvas id="mQlfDonut"></canvas><div class="donut-center"><div class="dc-val" id="mQlfPct">-</div><div class="dc-lbl">Tx‑MQL</div></div></div></div>
-          <div class="card" style="padding:0"><div style="padding:14px 15px 4px"><h3>Compilado dos Anúncios</h3><p class="hint" style="margin:0">Menor CAC no topo · cruzamento Conversas × Compradores por telefone</p></div><div class="tbl-wrap" style="max-height:214px;padding:0 0 10px"><table class="dt" id="mTopCac"></table></div></div>
+          <div class="card"><h3>MQLs por anúncio</h3><p class="hint">Top 10 · utm_content</p><div class="chart-box chart-sm"><canvas id="qzMqlAd"></canvas></div></div>
+          <div class="card"><h3>Taxa de qualificação por anúncio</h3><p class="hint">Verde = MQL (Pontuação &gt; 33) · vermelho = desqualificado</p><div class="donut-wrap"><canvas id="qzQlfDonut"></canvas><div class="donut-center"><div class="dc-val" id="qzQlfPct">-</div><div class="dc-lbl">Tx‑MQL</div></div></div></div>
+          <div class="card" style="padding:0"><div style="padding:14px 15px 4px"><h3>Compilado dos Anúncios</h3><p class="hint" style="margin:0">Menor CAC no topo · cruzamento Conversas × Compradores por telefone</p></div><div class="tbl-wrap" style="max-height:214px;padding:0 0 10px"><table class="dt" id="qzTopCac"></table></div></div>
         </div>
 
         <h2 class="sec-title">Hierarquia · Campanha → Conjunto → Anúncio</h2>
         <div class="table-chart-pair">
           <div class="thead-title">Campanhas</div>
-          <div class="tbl-wrap tbl-normal"><table class="dt" id="tCamp"></table></div>
+          <div class="tbl-wrap tbl-normal"><table class="dt" id="qzCamp"></table></div>
           <div class="pair-chart">
             <div class="pc-title">Custo por MQL, por campanha, por dia · clique numa linha ou na legenda para filtrar</div>
-            <div class="pc-canvas-wrap"><canvas id="chCamp"></canvas></div>
-            <div class="chart-legend" id="chCampLegend"></div>
+            <div class="pc-canvas-wrap"><canvas id="chQzCamp"></canvas></div>
+            <div class="chart-legend" id="chQzCampLegend"></div>
           </div>
         </div>
         <div class="table-chart-pair">
           <div class="thead-title">Conjuntos (Ad Sets)</div>
-          <div class="tbl-wrap tbl-normal"><table class="dt" id="tAdset"></table></div>
+          <div class="tbl-wrap tbl-normal"><table class="dt" id="qzAdset"></table></div>
           <div class="pair-chart">
             <div class="pc-title">Custo por MQL, por conjunto, por dia · clique numa linha ou na legenda para filtrar</div>
-            <div class="pc-canvas-wrap"><canvas id="chAdset"></canvas></div>
-            <div class="chart-legend" id="chAdsetLegend"></div>
+            <div class="pc-canvas-wrap"><canvas id="chQzAdset"></canvas></div>
+            <div class="chart-legend" id="chQzAdsetLegend"></div>
           </div>
         </div>
         <div class="table-chart-pair">
           <div class="thead-title">Anúncios</div>
-          <div class="tbl-wrap tbl-double"><table class="dt" id="tAd"></table></div>
+          <div class="tbl-wrap tbl-double"><table class="dt" id="qzAd"></table></div>
           <div class="pair-chart">
             <div class="pc-title">Custo por MQL, por anúncio, por dia · clique numa linha ou na legenda para filtrar</div>
-            <div class="pc-canvas-wrap"><canvas id="chAd"></canvas></div>
-            <div class="chart-legend" id="chAdLegend"></div>
+            <div class="pc-canvas-wrap"><canvas id="chQzAd"></canvas></div>
+            <div class="chart-legend" id="chQzAdLegend"></div>
           </div>
         </div>
 
-        <h2 class="sec-title">Leads qualificados <span class="pill q" id="qCount"></span></h2>
+        <h2 class="sec-title">Leads qualificados <span class="pill q" id="qzQCount"></span></h2>
         <div class="card" style="padding:0">
-          <div class="tbl-wrap" style="max-height:360px"><table class="dt" id="tQual"></table></div>
+          <div class="tbl-wrap" style="max-height:360px"><table class="dt" id="qzQual"></table></div>
           <p class="note" style="padding:10px 15px">E‑mail e telefone <b>mascarados</b> (página pública). A lista completa fica só na planilha.</p>
         </div>
       </div>
 
-      <!-- ===================== PÁGINA 3: RELATÓRIO ===================== -->
+      <!-- ===================== PÁGINA 3: FUNIL WHATSAPP/ENGAJAMENTO ===================== -->
+      <div class="page" id="page-whatsapp">
+        <h2 class="sec-title">Funil WhatsApp/Engajamento (Meta Ads) &amp; combinação diária</h2>
+        <div class="grid funnel-grid">
+          <div class="card"><div class="funnel" id="waFunnel"></div>
+            <p class="note">Só campanhas "ENGJ" (WhatsApp/Engajamento) do funil E2-CAP — sem misturar com Quiz/LP ou Visitas ao Perfil. Leads = "Messaging Conversations Started" (não Link Clicks); MQL sempre 0, não dá pra qualificar 1 conversa individualmente. Agendamentos/Vendas/Faturamento aparecem “-” aqui (só entram na Visão Geral e no Relatório).</p>
+          </div>
+          <div class="panel">
+            <div class="panel-chart"><h3>Combinação diária</h3><p class="hint">Leads/MQLs (barras) · Gasto (linha vermelha) · CPL (linha) · CPMQL (linha amarela)</p><div class="chart-box"><canvas id="waCombo"></canvas></div></div>
+            <div class="tbl-wrap tbl-normal"><table class="dt" id="waDaily"></table></div>
+            <p class="note" style="padding:10px 15px 12px">Fonte: cruzamento Meta‑Ads (só WhatsApp/Engajamento). Heatmap por coluna (Gasto · Leads · MQLs) · último dia no topo · clique numa data para filtrar (Ctrl = várias). Valores em R$.</p>
+          </div>
+        </div>
+
+        <h2 class="sec-title">Anúncios · MQLs · qualificação · CAC</h2>
+        <div class="trio">
+          <div class="card"><h3>MQLs por anúncio</h3><p class="hint">Top 10 · utm_content</p><div class="chart-box chart-sm"><canvas id="waMqlAd"></canvas></div></div>
+          <div class="card"><h3>Taxa de qualificação por anúncio</h3><p class="hint">Verde = MQL (Pontuação &gt; 33) · vermelho = desqualificado</p><div class="donut-wrap"><canvas id="waQlfDonut"></canvas><div class="donut-center"><div class="dc-val" id="waQlfPct">-</div><div class="dc-lbl">Tx‑MQL</div></div></div></div>
+          <div class="card" style="padding:0"><div style="padding:14px 15px 4px"><h3>Compilado dos Anúncios</h3><p class="hint" style="margin:0">Menor CAC no topo · cruzamento Conversas × Compradores por telefone</p></div><div class="tbl-wrap" style="max-height:214px;padding:0 0 10px"><table class="dt" id="waTopCac"></table></div></div>
+        </div>
+
+        <h2 class="sec-title">Hierarquia · Campanha → Conjunto → Anúncio</h2>
+        <div class="table-chart-pair">
+          <div class="thead-title">Campanhas</div>
+          <div class="tbl-wrap tbl-normal"><table class="dt" id="waCamp"></table></div>
+          <div class="pair-chart">
+            <div class="pc-title">Custo por MQL, por campanha, por dia · clique numa linha ou na legenda para filtrar</div>
+            <div class="pc-canvas-wrap"><canvas id="chWaCamp"></canvas></div>
+            <div class="chart-legend" id="chWaCampLegend"></div>
+          </div>
+        </div>
+        <div class="table-chart-pair">
+          <div class="thead-title">Conjuntos (Ad Sets)</div>
+          <div class="tbl-wrap tbl-normal"><table class="dt" id="waAdset"></table></div>
+          <div class="pair-chart">
+            <div class="pc-title">Custo por MQL, por conjunto, por dia · clique numa linha ou na legenda para filtrar</div>
+            <div class="pc-canvas-wrap"><canvas id="chWaAdset"></canvas></div>
+            <div class="chart-legend" id="chWaAdsetLegend"></div>
+          </div>
+        </div>
+        <div class="table-chart-pair">
+          <div class="thead-title">Anúncios</div>
+          <div class="tbl-wrap tbl-double"><table class="dt" id="waAd"></table></div>
+          <div class="pair-chart">
+            <div class="pc-title">Custo por MQL, por anúncio, por dia · clique numa linha ou na legenda para filtrar</div>
+            <div class="pc-canvas-wrap"><canvas id="chWaAd"></canvas></div>
+            <div class="chart-legend" id="chWaAdLegend"></div>
+          </div>
+        </div>
+
+        <h2 class="sec-title">Leads qualificados <span class="pill q" id="waQCount"></span></h2>
+        <div class="card" style="padding:0">
+          <div class="tbl-wrap" style="max-height:360px"><table class="dt" id="waQual"></table></div>
+          <p class="note" style="padding:10px 15px">E‑mail e telefone <b>mascarados</b> (página pública). A lista completa fica só na planilha.</p>
+        </div>
+      </div>
+
+      <!-- ===================== PÁGINA 4: FUNIL VISITAS AO PERFIL ===================== -->
+      <div class="page" id="page-perfil">
+        <h2 class="sec-title">Funil Visitas ao Perfil (Meta Ads) &amp; combinação diária</h2>
+        <div class="grid funnel-grid">
+          <div class="card"><div class="funnel" id="pfFunnel"></div>
+            <p class="note">Outro funil/conta (E1-DIST, Alcance/Engajamento) — não é o funil E2-CAP de captura de leads deste dashboard, por isso não gera Leads/MQL/Vendas nem aparece nas outras abas.</p>
+          </div>
+          <div class="panel">
+            <div class="panel-chart"><h3>Combinação diária</h3><p class="hint">Cliques (barras) · Gasto (linha vermelha) · CPC (linha)</p><div class="chart-box"><canvas id="pfCombo"></canvas></div></div>
+            <div class="tbl-wrap tbl-normal"><table class="dt" id="pfDaily"></table></div>
+            <p class="note" style="padding:10px 15px 12px">Fonte: Meta Ads, Página 2 (E1-DIST). Heatmap no Gasto · último dia no topo · clique numa data para filtrar (Ctrl = várias). Valores em R$.</p>
+          </div>
+        </div>
+
+        <h2 class="sec-title">Hierarquia · Campanha → Conjunto → Anúncio</h2>
+        <div class="table-chart-pair">
+          <div class="thead-title">Campanhas</div>
+          <div class="tbl-wrap tbl-normal"><table class="dt" id="pfCamp"></table></div>
+          <div class="pair-chart">
+            <div class="pc-title">Custo por clique, por campanha, por dia · clique numa linha ou na legenda para filtrar</div>
+            <div class="pc-canvas-wrap"><canvas id="chPfCamp"></canvas></div>
+            <div class="chart-legend" id="chPfCampLegend"></div>
+          </div>
+        </div>
+        <div class="table-chart-pair">
+          <div class="thead-title">Conjuntos (Ad Sets)</div>
+          <div class="tbl-wrap tbl-normal"><table class="dt" id="pfAdset"></table></div>
+          <div class="pair-chart">
+            <div class="pc-title">Custo por clique, por conjunto, por dia · clique numa linha ou na legenda para filtrar</div>
+            <div class="pc-canvas-wrap"><canvas id="chPfAdset"></canvas></div>
+            <div class="chart-legend" id="chPfAdsetLegend"></div>
+          </div>
+        </div>
+        <div class="table-chart-pair">
+          <div class="thead-title">Anúncios</div>
+          <div class="tbl-wrap tbl-double"><table class="dt" id="pfAd"></table></div>
+          <div class="pair-chart">
+            <div class="pc-title">Custo por clique, por anúncio, por dia · clique numa linha ou na legenda para filtrar</div>
+            <div class="pc-canvas-wrap"><canvas id="chPfAd"></canvas></div>
+            <div class="chart-legend" id="chPfAdLegend"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== PÁGINA 5: RELATÓRIO ===================== -->
       <div class="page" id="page-rel">
         <div class="rel-head">
           <div>

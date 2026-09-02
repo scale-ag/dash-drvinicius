@@ -27,7 +27,12 @@ const TODAY = B.today || B.date_max;
 const STATE = {
   page:'geral', from:(()=>{const [y,m]=TODAY.split('-'); return `${y}-${m}-01`;})(), to:TODAY, preset:'mes', tax:true,
   selDays:new Set(),
-  mSelC:new Set(), mSelA:new Set(), mSelAd:new Set(),
+  // seleção de campanha/conjunto/anúncio (filtro cruzado), independente por funil
+  fun:{
+    quiz:{selC:new Set(),selA:new Set(),selAd:new Set()},
+    whatsapp:{selC:new Set(),selA:new Set(),selAd:new Set()},
+    perfil:{selC:new Set(),selA:new Set(),selAd:new Set()},
+  },
   sort:{}, colw: JSON.parse(localStorage.getItem('dm_colw')||'{}'),
 };
 const taxf = ()=> STATE.tax ? TAX : 1;
@@ -46,14 +51,31 @@ const salesActive = ()=> SALES.filter(s=>dateActive(s.d));
 /* agenda: agregado DIÁRIO de Agendamentos/Cirurgias (comercial), sem telefone
    nem atribuição por anúncio — só entra em totals()/daily() da Visão Geral
    e do Relatório (renderGeralCore), nunca na quebra por campanha/conjunto/
-   anúncio da aba de mídia paga (metaScope/buildAgg). */
+   anúncio de nenhum funil (funilScope/buildAgg). */
 const agendaActive = ()=> AGENDA.filter(a=>dateActive(a.d));
-/* meta_other: "Página 2" do Meta Ads (gasto/impressões sem Campaign Name —
-   outro funil/conta, não atribuível). Por pedido do cliente entra no Gasto/
-   Impressões da Visão Geral e do Relatório (mesmo padrão do agenda[] — só
-   totals()/daily()), nunca na quebra por campanha/conjunto/anúncio da aba
-   de mídia paga (metaScope/buildAgg/renderMeta). */
+/* meta_other: "Página 2" do Meta Ads — funil "Visitas ao Perfil" (outro
+   funil/conta, E1-DIST). Gasto/Impressões/Cliques/Page Views entram no total
+   geral da Visão Geral/Relatório (mesmo padrão do agenda[] — só
+   totals()/daily()) E têm sua própria aba (renderFunilPerfil), mas nunca
+   entram na quebra por campanha dos funis Quiz/WhatsApp (funilScope). */
 const metaOtherActive = ()=> META_OTHER.filter(m=>dateActive(m.d));
+
+/* ---------------- funis separados (Quiz/LP · WhatsApp/Engajamento · Visitas
+   ao Perfil) — 3 abas independentes, cada uma só com os dados do seu próprio
+   funil, pra dar pra reportar pro cliente sem misturar números de um funil
+   no outro. "quiz"/"whatsapp" vêm de META (Página 1, campo `funnel` já
+   classificado em build.py); "perfil" vem de META_OTHER (Página 2 — outro
+   funil/conta, E1-DIST) inteiro (não tem outro funil misturado nessa aba). */
+const FUNIS = ['quiz','whatsapp','perfil'];
+function adsActiveFunil(funil){
+  const src = funil==='perfil' ? META_OTHER : META;
+  return src.filter(m=>dateActive(m.d) && (funil==='perfil' || m.funnel===funil));
+}
+function leadsActiveFunil(funil){
+  const srcMap={quiz:'meta', whatsapp:'whatsapp'};
+  const src=srcMap[funil];
+  return src ? leadsActive().filter(l=>l.src===src) : [];
+}
 
 /* ---------------- aggregation ---------------- */
 function derive(a){
@@ -466,7 +488,7 @@ function lineChart(id, d){
 }
 
 /* Donut de taxa de qualificação (Mar02): verde = MQL · vermelho = desqualificado */
-function donutQlf(id, mqls, leads){
+function donutQlf(id, mqls, leads, pctId){
   destroy(id); const el=document.getElementById(id); if(!el) return;
   const dsq=Math.max(0,leads-mqls);
   charts[id]=new Chart(el,{type:'doughnut',
@@ -474,16 +496,16 @@ function donutQlf(id, mqls, leads){
       backgroundColor:[cvar('--good'),cvar('--bad')],borderColor:cvar('--surface'),borderWidth:2}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'68%',
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.label+': '+intf(c.raw)+(leads?' ('+pct(c.raw/leads)+')':'')}}}}});
-  const el2=document.getElementById('mQlfPct'); if(el2) el2.textContent=pct(leads?mqls/leads:null);
+  const el2=document.getElementById(pctId||(id+'Pct')); if(el2) el2.textContent=pct(leads?mqls/leads:null);
 }
 /* Mar03/Mar10: MQLs por dimensão (campanha/conjunto/anúncio) por dia — 1 linha por membro.
    Legenda é um painel HTML próprio (fora do canvas) — a legenda NATIVA do Chart.js
    quebra/trunca nomes longos porque respeita a largura do canvas; a nossa não.
    Formato de cada linha: [quadrado da cor] Nome completo da campanha ... CPMQL.
    Clique numa linha da legenda OU numa linha do gráfico filtra a tabela (selDim);
-   quando a tabela já tem seleção (STATE.mSel*), o gráfico plota SÓ as linhas
-   selecionadas (a legenda continua listando todas p/ dar pra trocar a seleção). */
-function mqlByDimChart(id, fL, fM, agg, dim, selSet){
+   quando a tabela já tem seleção (STATE.fun[funil].sel*), o gráfico plota SÓ
+   as linhas selecionadas (a legenda continua listando todas p/ trocar a seleção). */
+function mqlByDimChart(id, fL, fM, agg, dim, selSet, funil){
   destroy(id); const el=document.getElementById(id); const legEl=document.getElementById(id+'Legend');
   if(!el) return;
   const days=[...new Set([...fL,...fM].filter(r=>r.d).map(r=>r.d))].sort();
@@ -512,7 +534,7 @@ function mqlByDimChart(id, fL, fM, agg, dim, selSet){
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},
       // clique em qualquer ponto/linha do gráfico filtra igual clicar na linha da tabela
       onClick:(e,act)=>{ if(act.length){ const idx=act[0].datasetIndex;
-        if(idx!=null&&dsets[idx]) selDim(dimChar,dsets[idx].label,false); } },
+        if(idx!=null&&dsets[idx]) selDim(funil,dimChar,dsets[idx].label,false); } },
       plugins:{
         legend:{display:false},   // legenda nativa desligada — usamos o painel HTML abaixo
         // tooltip: nome COMPLETO do dataset (nunca o rótulo do eixo X) + CPMQL do dia.
@@ -536,9 +558,82 @@ function mqlByDimChart(id, fL, fM, agg, dim, selSet){
         +`<span class="cl-val">${brl(cpmql)}</span></div>`;
     }).join('');
     legEl.querySelectorAll('.cl-row').forEach(row=>{
-      row.addEventListener('click',()=>selDim(dimChar,row.dataset.mv,false));
+      row.addEventListener('click',()=>selDim(funil,dimChar,row.dataset.mv,false));
     });
   }
+}
+
+/* Variante de mqlByDimChart p/ o funil "Visitas ao Perfil" (Página 2): não
+   tem Leads/MQL, então o custo por dia é CUSTO POR CLIQUE (gasto/cliques do
+   dia), só a partir de fM — mesmo layout/legenda/filtro cruzado. */
+function cpcByDimChart(id, fM, agg, dim, selSet, funil){
+  destroy(id); const el=document.getElementById(id); const legEl=document.getElementById(id+'Legend');
+  if(!el) return;
+  const days=[...new Set(fM.filter(r=>r.d).map(r=>r.d))].sort();
+  const members=[...new Set(fM.map(r=>r[dim]))].sort((a,b)=>{
+    const ca=agg[a]?derive(agg[a]).cpc:null, cb=agg[b]?derive(agg[b]).cpc:null;
+    if(ca==null&&cb==null) return 0; if(ca==null) return 1; if(cb==null) return -1; return ca-cb;
+  });
+  const pal=chartPalette(), mut=cmuted();
+  const dimChar={'camp':'C','adset':'A','ad':'D'}[dim]||'C';
+  const plotMembers = (selSet&&selSet.size) ? members.filter(m=>selSet.has(m)) : members;
+  const dsets=plotMembers.map(mv=>{
+    const idx=members.indexOf(mv);
+    const spDay={}, clDay={}; days.forEach(d=>{spDay[d]=0; clDay[d]=0;});
+    fM.forEach(r=>{ if(r[dim]===mv && r.d!=null && spDay[r.d]!=null){ spDay[r.d]+=r.sp; clDay[r.d]+=r.cl; } });
+    const data=days.map(d=> clDay[d]>0 ? +((spDay[d]*taxf())/clDay[d]).toFixed(2) : null);
+    const col=pal[idx%pal.length];
+    return {label:String(mv), data, borderColor:col, backgroundColor:col, borderWidth:2, pointRadius:2, tension:.25, spanGaps:true};
+  });
+  charts[id]=new Chart(el,{type:'line',
+    data:{labels:days.map(d=>d.slice(5)), datasets:dsets},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},
+      onClick:(e,act)=>{ if(act.length){ const idx=act[0].datasetIndex;
+        if(idx!=null&&dsets[idx]) selDim(funil,dimChar,dsets[idx].label,false); } },
+      plugins:{
+        legend:{display:false},
+        tooltip:{displayColors:true,
+          callbacks:{title:()=>'', label:c=>[c.dataset.label, (c.raw==null?'-':brl(c.raw))+' / clique']}}
+      },
+      scales:{x:{ticks:{color:mut,font:{size:9}},grid:{display:false}},
+        y:{ticks:{color:mut,font:{size:9},callback:v=>'R$'+nf0.format(v)},grid:{color:cgrid()},beginAtZero:true}}
+    }
+  });
+  if(legEl){
+    legEl.innerHTML = members.map((mv,idx)=>{
+      const col=pal[idx%pal.length];
+      const cpc = agg[mv]!=null ? derive(agg[mv]).cpc : null;
+      const sel = !!(selSet && selSet.has(mv));
+      return `<div class="cl-row${sel?' sel':''}" data-mv="${escHtml(mv)}" title="${escHtml(mv)}">`
+        +`<span class="cl-swatch" style="background:${col}"></span>`
+        +`<span class="cl-name">${escHtml(mv)}</span>`
+        +`<span class="cl-val">${brl(cpc)}</span></div>`;
+    }).join('');
+    legEl.querySelectorAll('.cl-row').forEach(row=>{
+      row.addEventListener('click',()=>selDim(funil,dimChar,row.dataset.mv,false));
+    });
+  }
+}
+
+/* Variante de comboChart p/ o funil "Visitas ao Perfil" (sem Leads/MQL):
+   barra = Cliques · linhas = Gasto (vermelha) e CPC. */
+function comboChartAds(id, d){
+  destroy(id); const el=document.getElementById(id); if(!el) return;
+  const labels=d.map(x=>x.d.slice(5)), mut=cmuted(), gr=cgrid();
+  const cLeads=cvar('--chart-leads'), cGasto=cvar('--chart-gasto'), cCpl=cvar('--chart-cpl')||cink();
+  charts[id]=new Chart(el,{
+    data:{labels, datasets:[
+      {type:'bar',label:'Cliques',data:d.map(x=>x.cl),backgroundColor:cLeads,yAxisID:'y',borderRadius:3,order:3},
+      {type:'line',label:'Gasto',data:d.map(x=>+(x.sp*taxf()).toFixed(2)),borderColor:cGasto,backgroundColor:cGasto,yAxisID:'y1',borderWidth:2,pointRadius:2,tension:.25,order:1},
+      {type:'line',label:'CPC',data:d.map(x=>x.cl?+((x.sp*taxf())/x.cl).toFixed(2):null),borderColor:cCpl,backgroundColor:cCpl,yAxisID:'y1',borderWidth:2,pointRadius:2,spanGaps:true,tension:.25,order:0},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{color:cink(),boxWidth:10,usePointStyle:true,font:{size:11}}},
+        tooltip:{callbacks:{label:c=>{const v=c.raw; return c.dataset.label+': '+(c.dataset.yAxisID==='y1'?brl(v):intf(v));}}}},
+      scales:{x:{ticks:{color:mut,font:{size:10}},grid:{display:false}},
+        y:{position:'left',ticks:{color:mut,font:{size:10}},grid:{color:gr},beginAtZero:true,title:{display:true,text:'Cliques',color:mut,font:{size:10}}},
+        y1:{position:'right',ticks:{color:mut,font:{size:10}},grid:{display:false},beginAtZero:true,title:{display:true,text:'R$',color:mut,font:{size:10}}}}}
+  });
 }
 
 /* ---------------- KPI cards ---------------- */
@@ -914,26 +1009,59 @@ function dailyCells(x,d,isTotal){
     leads:x.leads, cpl:d.cpl, tx:d.tx, mqls:x.mqls, cpmql:d.cpmql,
     convmql:s.convmql, vendas:s.vendas, cac:s.cac, fat:s.fat, receita:s.receita, roas:s.roas};
 }
+/* colunas da tabela diária do funil "Visitas ao Perfil" — sem Leads/MQL/Vendas
+   (esse funil não gera lead — ver build.py), então essas colunas nem aparecem
+   (em vez de mostrar "-" pra sempre, mesmo padrão do Checkout removido de
+   DAILY_COLS pra este cliente). */
+const DAILY_COLS_ADS=[
+  {key:'date',label:'Data',type:'date'},{key:'wd',label:'Dia',type:'dim',w:70},
+  {key:'gasto',label:'Gasto',type:'brl',heat:'gasto'},{key:'cpm',label:'CPM',type:'brl'},
+  {key:'cliques',label:'Cliques',type:'int'},{key:'ctr',label:'CTR',type:'pct'},{key:'cpc',label:'CPC',type:'brl'},
+  {key:'pv',label:'Page Views',type:'int'},{key:'cr',label:'CR',type:'pct'},{key:'cpv',label:'CPV',type:'brl'},
+];
+function dailyCellsAds(x,d,isTotal){
+  return {date:isTotal?null:x.d, wd:isTotal?'':weekday(x.d), gasto:d.gasto, cpm:d.cpm,
+    cliques:x.cl, ctr:d.ctr, cpc:d.cpc, pv:x.pv, cr:d.cr, cpv:d.cpv};
+}
 
-/* ---------------- PAGE 2: Captura Meta Ads ---------------- */
-/* Mar04: considera TODOS os leads e TODO o gasto de todas as fontes de tráfego
-   (sem filtrar por atribuição). Hoje só há Meta; quando vier google/tiktok/orgânico
-   etc., já entram automaticamente. */
-function metaScope(ex){ let fL=leadsActive(), fM=metaActive(), fS=salesActive();
-  if(ex!=='C'&&STATE.mSelC.size){ fL=fL.filter(r=>STATE.mSelC.has(r.camp)); fM=fM.filter(r=>STATE.mSelC.has(r.camp)); fS=fS.filter(r=>STATE.mSelC.has(r.camp)); }
-  if(ex!=='A'&&STATE.mSelA.size){ fL=fL.filter(r=>STATE.mSelA.has(r.adset)); fM=fM.filter(r=>STATE.mSelA.has(r.adset)); fS=fS.filter(r=>STATE.mSelA.has(r.adset)); }
-  if(ex!=='D'&&STATE.mSelAd.size){ fL=fL.filter(r=>STATE.mSelAd.has(r.ad)); fM=fM.filter(r=>STATE.mSelAd.has(r.ad)); fS=fS.filter(r=>STATE.mSelAd.has(r.ad)); }
-  return {fL,fM,fS}; }
-/* selecao multipla: Ctrl adiciona (OR) sem sumir as demais linhas; clique simples troca a ancora */
-function selDim(dim,key,ctrl){
-  const sets={C:STATE.mSelC,A:STATE.mSelA,D:STATE.mSelAd}, s=sets[dim];
+/* ---------------- PÁGINAS: Funil Quiz / Funil WhatsApp / Funil Visitas ao Perfil ----------------
+   Cada funil (Quiz/LP, WhatsApp/Engajamento, Visitas ao Perfil) tem sua PRÓPRIA
+   aba/DOM/seleção de campanha·conjunto·anúncio (STATE.fun[funil]) — nada é
+   somado entre funis aqui, ao contrário da Visão Geral (que soma tudo de
+   propósito). Isso é o que permite reportar cada funil pro cliente sem
+   misturar números de um funil no outro. */
+function funilScope(funil, ex){
+  const sel=STATE.fun[funil];
+  let fL=leadsActiveFunil(funil), fM=adsActiveFunil(funil), fS=salesActive();
+  if(ex!=='C'&&sel.selC.size){ fL=fL.filter(r=>sel.selC.has(r.camp)); fM=fM.filter(r=>sel.selC.has(r.camp)); fS=fS.filter(r=>sel.selC.has(r.camp)); }
+  if(ex!=='A'&&sel.selA.size){ fL=fL.filter(r=>sel.selA.has(r.adset)); fM=fM.filter(r=>sel.selA.has(r.adset)); fS=fS.filter(r=>sel.selA.has(r.adset)); }
+  if(ex!=='D'&&sel.selAd.size){ fL=fL.filter(r=>sel.selAd.has(r.ad)); fM=fM.filter(r=>sel.selAd.has(r.ad)); fS=fS.filter(r=>sel.selAd.has(r.ad)); }
+  return {fL,fM,fS};
+}
+/* seleção multipla: Ctrl adiciona (OR) sem sumir as demais linhas; clique simples troca a âncora */
+function selDim(funil,dim,key,ctrl){
+  const sel=STATE.fun[funil];
+  const sets={C:sel.selC,A:sel.selA,D:sel.selAd}, s=sets[dim];
   if(ctrl){ s.has(key)?s.delete(key):s.add(key); }
   else { const sole=s.has(key)&&s.size===1&&!Object.entries(sets).some(([k2,x])=>k2!==dim&&x.size);
     Object.values(sets).forEach(x=>x.clear()); if(!sole) s.add(key); }
-  renderMeta();
+  renderFunil(funil);
 }
-function renderMeta(){
-  const F=metaScope(null), fL=F.fL, fM=F.fM, fS=F.fS;   // KPIs, funil, graficos e tabela diaria
+const QUIZ_IDS={funnel:'qzFunnel',combo:'qzCombo',mqlAd:'qzMqlAd',qlfDonut:'qzQlfDonut',qlfPct:'qzQlfPct',topCac:'qzTopCac',
+  daily:'qzDaily',camp:'qzCamp',adset:'qzAdset',ad:'qzAd',chCamp:'chQzCamp',chAdset:'chQzAdset',chAd:'chQzAd',qual:'qzQual',qCount:'qzQCount'};
+const WHATSAPP_IDS={funnel:'waFunnel',combo:'waCombo',mqlAd:'waMqlAd',qlfDonut:'waQlfDonut',qlfPct:'waQlfPct',topCac:'waTopCac',
+  daily:'waDaily',camp:'waCamp',adset:'waAdset',ad:'waAd',chCamp:'chWaCamp',chAdset:'chWaAdset',chAd:'chWaAd',qual:'waQual',qCount:'waQCount'};
+const PERFIL_IDS={funnel:'pfFunnel',combo:'pfCombo',daily:'pfDaily',camp:'pfCamp',adset:'pfAdset',ad:'pfAd',chCamp:'chPfCamp',chAdset:'chPfAdset',chAd:'chPfAd'};
+
+function renderFunil(funil){
+  if(funil==='perfil') renderFunilPerfil(funil,PERFIL_IDS);
+  else renderFunilLeads(funil, funil==='quiz'?QUIZ_IDS:WHATSAPP_IDS);
+}
+
+/* Funil Quiz/LP e Funil WhatsApp/Engajamento — mesma estrutura de sempre
+   (era a antiga "Captura Meta Ads"), só que escopada a UM funil por vez. */
+function renderFunilLeads(funil, ids){
+  const F=funilScope(funil,null), fL=F.fL, fM=F.fM, fS=F.fS;
   const t=totals(fL,fM,fS), dv=derive(t), g=dv.gasto;
   const NA='<span class="na-tag">sem dado</span>';
   const s=salesOf(t);
@@ -948,42 +1076,31 @@ function renderMeta(){
     ['Receita', s.receita!=null?brl(s.receita):NA, [['ROAS',s.roasReceita!=null?numf(s.roasReceita):NA],['Ticket',s.tmReceita!=null?brl(s.tmReceita):NA]], s.receita==null, 'hl-fat'],
     ['Faturamento', s.fat!=null?brl(s.fat):NA, [['ROAS',s.roas!=null?numf(s.roas):NA],['Ticket',s.tm!=null?brl(s.tm):NA]], s.fat==null, 'hl-fat'],
   ];
-  document.getElementById('metaFunnel').innerHTML=funnelHTML(steps);
+  document.getElementById(ids.funnel).innerHTML=funnelHTML(steps);
 
-  comboChart('mCombo', daily(fL,fM,fS));
-  // Mar02: barras de MQLs por anúncio (não leads)
+  comboChart(ids.combo, daily(fL,fM,fS));
   const mqlByAd={}; fL.forEach(l=>{ mqlByAd[l.ad]=(mqlByAd[l.ad]||0)+l.q; });
-  hbar('mMqlAd', Object.entries(mqlByAd).map(([label,leads])=>({label,leads})), x=>x.leads, ()=>cvar('--chart-mqls'), 10, 'MQLs');
-  // Mar02: donut de taxa de qualificação (verde = MQL, vermelho = desqualificado)
-  donutQlf('mQlfDonut', t.mqls, t.leads);
-  // Compilado dos Anúncios (CAC/Fat/ROAS "-" até conectar compradores; ordena por CPMQL como proxy)
+  hbar(ids.mqlAd, Object.entries(mqlByAd).map(([label,leads])=>({label,leads})), x=>x.leads, ()=>cvar('--chart-mqls'), 10, 'MQLs');
+  donutQlf(ids.qlfDonut, t.mqls, t.leads, ids.qlfPct);
   const adAggM=buildAgg(fL,fM,fS,'ad');
   const topCacRows=Object.entries(adAggM).map(([ad,a])=>{const d=derive(a),s=salesOf(a);
     return {k:ad, cells:{dim:ad,mqls:a.mqls,cpmql:d.cpmql,vendas:s.vendas,cac:s.cac,fat:s.fat,roas:s.roas},
       _ord:(s.cac!=null?s.cac:(d.cpmql!=null?d.cpmql:Infinity))};})
     .sort((a,b)=>a._ord-b._ord).slice(0,10);
-  // sem fit: 7 colunas não cabem legíveis dividindo 1/3 da página (.trio) —
-  // largura automática por coluna + scroll horizontal dentro do próprio card
-  // (mesmo padrão das tabelas hierárquicas), em vez de espremer tudo.
-  renderTable({id:'mTopCac', center:true,
+  renderTable({id:ids.topCac, center:true,
     cols:[{key:'dim',label:'Anúncios',type:'dim',big:true},{key:'mqls',label:'MQLs',type:'int'},
       {key:'cpmql',label:'CPMQL',type:'brl'},{key:'vendas',label:'Vendas',type:'int'},
       {key:'cac',label:'CAC',type:'brl'},{key:'fat',label:'Fat.',type:'brl'},{key:'roas',label:'ROAS',type:'num'}],
     rows:topCacRows});
 
   const dl=daily(fL,fM,fS).slice().reverse();
-  renderTable({id:'tDaily', cols:DAILY_COLS, center:true, fit:true,
+  renderTable({id:ids.daily, cols:DAILY_COLS, center:true, fit:true,
     rows:dl.map(x=>{const d=derive(x); return {k:x.d, cells:dailyCells(x,d)};}),
     total:(()=>{const d=derive(t);return dailyCells({...t,d:null},d,true);})(),
     selectable:true, selSet:STATE.selDays,
     onSelect:(k,e)=>{ toggleSet(STATE.selDays,k,e&&(e.ctrlKey||e.metaKey)); syncDateInputs(); renderAll(); },
   });
 
-  // hierarquia — cada tabela vem do escopo que exclui a PRÓPRIA dimensão,
-  // então todas as linhas irmãs continuam visíveis para multi-seleção (Ctrl).
-  // band:'l' (dim+Gasto) fica grudado na borda esquerda; as demais colunas
-  // rolam horizontalmente juntas (band do meio) — cabendo tudo, não aparece
-  // scroll nenhum e fica idêntico a uma tabela única, cabeçalho incluso.
   const hcols=[
     {key:'dim',label:'',type:'dim',big:true,band:'l'},{key:'gasto',label:'Gasto',type:'brl',band:'l'},
     {key:'cpm',label:'CPM',type:'brl'},
@@ -999,32 +1116,75 @@ function renderMeta(){
       convmql:s.convmql,vendas:s.vendas,cac:s.cac,fat:s.fat,receita:s.receita,roas:s.roas}};}); }
   function totRowOf(tt){const d=derive(tt),s=salesOf(tt);return{dim:null,gasto:d.gasto,cpm:d.cpm,ctr:d.ctr,cr:d.cr,convlp:d.convlp,leads:tt.leads,cpl:d.cpl,tx:d.tx,mqls:tt.mqls,cpmql:d.cpmql,
     convmql:s.convmql,vendas:s.vendas,cac:s.cac,fat:s.fat,receita:s.receita,roas:s.roas};}
-  const Sc=metaScope('C'), Sa=metaScope('A'), Sd=metaScope('D');
+  const Sc=funilScope(funil,'C'), Sa=funilScope(funil,'A'), Sd=funilScope(funil,'D');
   const aggC=buildAgg(Sc.fL,Sc.fM,Sc.fS,'camp'), aggA=buildAgg(Sa.fL,Sa.fM,Sa.fS,'adset'), aggD=buildAgg(Sd.fL,Sd.fM,Sd.fS,'ad');
-  // Tabelas hierárquicas: NÃO usam "fit" — a dimensão (campanha/conjunto/anúncio)
-  // tem largura automática p/ caber o nome INTEIRO por padrão, nunca quebra linha,
-  // é redimensionável (arrastar borda) e 2 cliques na borda auto-ajusta (Sheets/Looker).
-  renderTable({id:'tCamp', cols:hcols.map((c,i)=>i===0?{...c,label:'Campanha'}:c), rows:hierRows(aggC), total:totRowOf(totals(Sc.fL,Sc.fM,Sc.fS)),
-    selectable:true, selSet:STATE.mSelC, onSelect:(k,e)=>selDim('C',k,e&&(e.ctrlKey||e.metaKey))});
-  renderTable({id:'tAdset', cols:hcols.map((c,i)=>i===0?{...c,label:'Conjunto',big:true}:c), rows:hierRows(aggA), total:totRowOf(totals(Sa.fL,Sa.fM,Sa.fS)),
-    selectable:true, selSet:STATE.mSelA, onSelect:(k,e)=>selDim('A',k,e&&(e.ctrlKey||e.metaKey))});
-  renderTable({id:'tAd', cols:hcols.map((c,i)=>i===0?{...c,label:'Anúncio'}:c), rows:hierRows(aggD), total:totRowOf(totals(Sd.fL,Sd.fM,Sd.fS)),
-    selectable:true, selSet:STATE.mSelAd, onSelect:(k,e)=>selDim('D',k,e&&(e.ctrlKey||e.metaKey))});
+  const sel=STATE.fun[funil];
+  renderTable({id:ids.camp, cols:hcols.map((c,i)=>i===0?{...c,label:'Campanha'}:c), rows:hierRows(aggC), total:totRowOf(totals(Sc.fL,Sc.fM,Sc.fS)),
+    selectable:true, selSet:sel.selC, onSelect:(k,e)=>selDim(funil,'C',k,e&&(e.ctrlKey||e.metaKey))});
+  renderTable({id:ids.adset, cols:hcols.map((c,i)=>i===0?{...c,label:'Conjunto',big:true}:c), rows:hierRows(aggA), total:totRowOf(totals(Sa.fL,Sa.fM,Sa.fS)),
+    selectable:true, selSet:sel.selA, onSelect:(k,e)=>selDim(funil,'A',k,e&&(e.ctrlKey||e.metaKey))});
+  renderTable({id:ids.ad, cols:hcols.map((c,i)=>i===0?{...c,label:'Anúncio'}:c), rows:hierRows(aggD), total:totRowOf(totals(Sd.fL,Sd.fM,Sd.fS)),
+    selectable:true, selSet:sel.selAd, onSelect:(k,e)=>selDim(funil,'D',k,e&&(e.ctrlKey||e.metaKey))});
 
-  // Mar03/Mar10: cada gráfico varia a dimensão da sua tabela — MQLs por dia, 1 linha
-  // por membro, com legenda própria (cor · nome completo · CPMQL) e filtro bidirecional
-  // com a tabela (STATE.mSel* determina quais linhas o gráfico plota).
-  mqlByDimChart('chCamp', Sc.fL, Sc.fM, aggC, 'camp', STATE.mSelC);
-  mqlByDimChart('chAdset', Sa.fL, Sa.fM, aggA, 'adset', STATE.mSelA);
-  mqlByDimChart('chAd', Sd.fL, Sd.fM, aggD, 'ad', STATE.mSelAd);
+  mqlByDimChart(ids.chCamp, Sc.fL, Sc.fM, aggC, 'camp', sel.selC, funil);
+  mqlByDimChart(ids.chAdset, Sa.fL, Sa.fM, aggA, 'adset', sel.selA, funil);
+  mqlByDimChart(ids.chAd, Sd.fL, Sd.fM, aggD, 'ad', sel.selAd, funil);
 
-  // qualified leads
   const q=fL.filter(l=>l.q).sort((a,b)=>(a.d<b.d?1:-1));
-  document.getElementById('qCount').textContent=q.length+' leads';
-  renderTable({id:'tQual',
+  document.getElementById(ids.qCount).textContent=q.length+' leads';
+  renderTable({id:ids.qual,
     cols:[{key:'d',label:'Data',type:'date'},{key:'nm',label:'Nome',type:'dim'},{key:'prof',label:'Profissão',type:'dim'},
       {key:'bucket',label:'Faixa',type:'dim'},{key:'camp',label:'Campanha',type:'dim',big:true},{key:'em',label:'E‑mail',type:'dim',w:200},{key:'ph',label:'Telefone',type:'dim',w:110}],
     rows:q.map((l,i)=>({k:'q'+i, cells:{d:l.d,nm:l.nm,prof:l.prof,bucket:l.bucket,camp:l.camp,em:l.em,ph:l.ph}}))});
+}
+
+/* Funil Visitas ao Perfil (Página 2 / E1-DIST) — não gera lead/MQL (funil de
+   topo, não de captura), então não tem seção de MQLs/qualificação/CAC nem
+   tabela de leads qualificados; usa comboChartAds/cpcByDimChart (Cliques/CPC
+   no lugar de Leads/CPMQL) e colunas de tabela sem Leads/MQL/Vendas. */
+function renderFunilPerfil(funil, ids){
+  const F=funilScope(funil,null), fM=F.fM;
+  const t=totals([],fM,[]), dv=derive(t), g=dv.gasto;
+  const steps=[
+    ['Gasto Total', brl(g), [], false, 'hl-gasto'],
+    ['Impressões', intf(t.im), [['CPM',brl(dv.cpm)]]],
+    ['Cliques', intf(t.cl), [['CTR',pct(dv.ctr)],['CPC',brl(dv.cpc)]]],
+    ['Page Views', intf(t.pv), [['CR',pct(dv.cr)],['CPV',brl(dv.cpv)]]],
+  ];
+  document.getElementById(ids.funnel).innerHTML=funnelHTML(steps);
+
+  comboChartAds(ids.combo, daily([],fM,[]));
+
+  const dl=daily([],fM,[]).slice().reverse();
+  renderTable({id:ids.daily, cols:DAILY_COLS_ADS, center:true, fit:true,
+    rows:dl.map(x=>{const d=derive(x); return {k:x.d, cells:dailyCellsAds(x,d)};}),
+    total:(()=>{const d=derive(t);return dailyCellsAds({...t,d:null},d,true);})(),
+    selectable:true, selSet:STATE.selDays,
+    onSelect:(k,e)=>{ toggleSet(STATE.selDays,k,e&&(e.ctrlKey||e.metaKey)); syncDateInputs(); renderAll(); },
+  });
+
+  const hcols=[
+    {key:'dim',label:'',type:'dim',big:true,band:'l'},{key:'gasto',label:'Gasto',type:'brl',band:'l'},
+    {key:'cpm',label:'CPM',type:'brl'},{key:'cliques',label:'Cliques',type:'int'},
+    {key:'ctr',label:'CTR',type:'pct'},{key:'cpc',label:'CPC',type:'brl'},
+    {key:'pv',label:'Page Views',type:'int'},{key:'cr',label:'CR',type:'pct'},{key:'cpv',label:'CPV',type:'brl'},
+  ];
+  function hierRows(map){ return Object.entries(map).map(([k,a])=>{const d=derive(a);
+    return {k, cells:{dim:k,gasto:d.gasto,cpm:d.cpm,cliques:a.cl,ctr:d.ctr,cpc:d.cpc,pv:a.pv,cr:d.cr,cpv:d.cpv}};}); }
+  function totRowOf(tt){const d=derive(tt);return{dim:null,gasto:d.gasto,cpm:d.cpm,cliques:tt.cl,ctr:d.ctr,cpc:d.cpc,pv:tt.pv,cr:d.cr,cpv:d.cpv};}
+  const Sc=funilScope(funil,'C'), Sa=funilScope(funil,'A'), Sd=funilScope(funil,'D');
+  const aggC=buildAgg([],Sc.fM,[],'camp'), aggA=buildAgg([],Sa.fM,[],'adset'), aggD=buildAgg([],Sd.fM,[],'ad');
+  const sel=STATE.fun[funil];
+  renderTable({id:ids.camp, cols:hcols.map((c,i)=>i===0?{...c,label:'Campanha'}:c), rows:hierRows(aggC), total:totRowOf(totals([],Sc.fM,[])),
+    selectable:true, selSet:sel.selC, onSelect:(k,e)=>selDim(funil,'C',k,e&&(e.ctrlKey||e.metaKey))});
+  renderTable({id:ids.adset, cols:hcols.map((c,i)=>i===0?{...c,label:'Conjunto',big:true}:c), rows:hierRows(aggA), total:totRowOf(totals([],Sa.fM,[])),
+    selectable:true, selSet:sel.selA, onSelect:(k,e)=>selDim(funil,'A',k,e&&(e.ctrlKey||e.metaKey))});
+  renderTable({id:ids.ad, cols:hcols.map((c,i)=>i===0?{...c,label:'Anúncio'}:c), rows:hierRows(aggD), total:totRowOf(totals([],Sd.fM,[])),
+    selectable:true, selSet:sel.selAd, onSelect:(k,e)=>selDim(funil,'D',k,e&&(e.ctrlKey||e.metaKey))});
+
+  cpcByDimChart(ids.chCamp, Sc.fM, aggC, 'camp', sel.selC, funil);
+  cpcByDimChart(ids.chAdset, Sa.fM, aggA, 'adset', sel.selA, funil);
+  cpcByDimChart(ids.chAd, Sd.fM, aggD, 'ad', sel.selAd, funil);
 }
 
 /* ---------------- date presets ---------------- */
@@ -1116,17 +1276,21 @@ function ppApply(){
 }
 
 /* ---------------- navigation & boot ---------------- */
-function setPage(p){ STATE.page=p;
+const PAGE_IDS=['geral','quiz','whatsapp','perfil','rel'];
+const PAGE_TITLES={geral:'Visão Geral de Leads',quiz:'Funil Quiz/LP',whatsapp:'Funil WhatsApp/Engajamento',perfil:'Funil Visitas ao Perfil',rel:'Relatório'};
+function setPage(p){ if(!PAGE_IDS.includes(p)) p='geral'; STATE.page=p;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.page===p));
-  document.getElementById('page-geral').classList.toggle('active',p==='geral');
-  document.getElementById('page-meta').classList.toggle('active',p==='meta');
-  document.getElementById('page-rel').classList.toggle('active',p==='rel');
-  document.getElementById('ptitle').textContent = p==='meta'?'Captura Meta Ads':(p==='rel'?'Relatório':'Visão Geral de Leads');
+  PAGE_IDS.forEach(id=>document.getElementById('page-'+id).classList.toggle('active',p===id));
+  document.getElementById('ptitle').textContent = PAGE_TITLES[p];
   document.getElementById('navToggle').checked=false;
-  history.replaceState(null,'', p==='meta'?'#meta':(p==='rel'?'#rel':'#geral'));
+  history.replaceState(null,'', '#'+p);
   renderAll();
 }
-function renderAll(){ if(STATE.page==='meta') renderMeta(); else if(STATE.page==='rel') renderRelatorio(); else renderGeral(); }
+function renderAll(){
+  if(STATE.page==='quiz'||STATE.page==='whatsapp'||STATE.page==='perfil') renderFunil(STATE.page);
+  else if(STATE.page==='rel') renderRelatorio();
+  else renderGeral();
+}
 
 function applyTheme(){ const t=localStorage.getItem('dm_theme'); if(t==='light') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme','dark'); }
 applyTheme();
@@ -1141,7 +1305,10 @@ document.getElementById('ppCancel').addEventListener('click',ppClose);
 document.getElementById('periodPop').addEventListener('click',e=>e.stopPropagation());
 document.addEventListener('click',()=>{ if(ppIsOpen()) ppClose(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&ppIsOpen()) ppClose(); });
-document.getElementById('clearBtn').addEventListener('click',()=>{ STATE.mSelC.clear();STATE.mSelA.clear();STATE.mSelAd.clear();STATE.selDays.clear(); applyPreset('mes'); });
+document.getElementById('clearBtn').addEventListener('click',()=>{
+  Object.values(STATE.fun).forEach(sel=>{ sel.selC.clear(); sel.selA.clear(); sel.selAd.clear(); });
+  STATE.selDays.clear(); applyPreset('mes');
+});
 document.getElementById('refreshBtn').addEventListener('click',function(){ this.classList.add('loading'); location.href=location.pathname+'?t='+Date.now()+location.hash; });
 
 /* painel de Metas & parâmetros — edita ao vivo, salva em localStorage e recolore
@@ -1168,7 +1335,7 @@ document.getElementById('buildFoot').textContent='build __BUILD_ID__';
 document.getElementById('buildFoot2').textContent='· build __BUILD_ID__';
 
 syncDateInputs();
-setPage(location.hash==='#meta'?'meta':(location.hash==='#rel'?'rel':'geral'));
+setPage(location.hash.replace('#','')||'geral');
 
 /* auto-refresh com cache-bust ~30 min */
 setTimeout(()=>{ location.href=location.pathname+'?t='+Date.now()+location.hash; }, 30*60*1000);

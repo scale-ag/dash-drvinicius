@@ -12,31 +12,35 @@ SEPARADAS do cliente Dr. Vinicius:
     lida aqui — e na verdade um recorte de agendamentos, nao de leads (ver
     nota abaixo).
   - Meta Ads (aba "Pagina 1"): investimento/impressoes/cliques/page views do
-    gerenciador de trafego. Campanhas com "ENGJ" no nome sao de Engajamento/
-    WhatsApp (clique abre conversa direto, sem passar pelo quiz) — cada
-    "Messaging Conversations Started" dessas campanhas vira 1 lead sintetico
-    (sem nome/pontuacao, src="whatsapp"), SEM entrar no quiz/Sessões. NAO usa
-    Link Clicks — nem todo clique vira conversa de fato (confirmado com o
-    cliente: clique superestima em quase 2x o resultado real do Ads Manager).
-    Campanhas "LEADS|" (Quiz/LP) NAO geram lead sintetico — esses leads ja
-    vêm via Sessões/Enviou.
+    gerenciador de trafego, com DUAS campanhas/funis dentro do mesmo E2-CAP,
+    classificados por `classify_funnel()` (substring no Campaign Name):
+      - "quiz" (tag "LEADS"): funil do Quiz/LP — os leads ja vêm via
+        Sessões/Enviou, NAO gera lead sintetico.
+      - "whatsapp" (tag "ENGJ"): clique abre conversa direto, sem passar
+        pelo quiz — cada "Messaging Conversations Started" dessas campanhas
+        vira 1 lead sintetico (sem nome/pontuacao, src="whatsapp"). NAO usa
+        Link Clicks — nem todo clique vira conversa de fato (confirmado com
+        o cliente: clique superestima em quase 2x o resultado real do Ads
+        Manager).
+    Cada funil tem sua PROPRIA aba na dashboard ("Funil Quiz"/"Funil
+    WhatsApp/Engajamento") — nunca misturados na mesma tabela/gráfico.
   - Agendamentos (aba "Planilha agendamento"): agregado DIARIO (nao por lead,
     sem telefone/nome) preenchido pelo comercial — Agendamentos Confirmados,
     Cirurgias Confirmadas e Valor Total Cirurgias. Sem chave de atribuicao por
     anuncio, entao so alimenta a Visao Geral/Relatorio (totals/daily), nunca a
-    quebra por campanha/conjunto/anuncio da aba de midia paga.
+    quebra por campanha/conjunto/anuncio de nenhum funil.
   - Meta Ads, aba "Página 2" (mesma planilha do Meta Ads, gid 0/segunda aba):
-    outro funil/conta ("DR. VINICIUS | E1-DIST | ... | Alcance / Engajamento",
-    que o cliente confirmou nao ser o mesmo funil E2-CAP deste dashboard).
-    Traz Day/Campaign Name/Ad Set Name/Ad Name/Impressions/Landing Page
-    Views/Amount Spent/Link Clicks/Reach — ja atribuivel por campanha/anuncio,
-    MAS o cliente pediu que a quebra por campanha da aba "Captura Meta Ads"
-    fique so com o funil E2-CAP (aba "Página 1"): Gasto/Impressões/Cliques/
-    Landing Page Views da Página 2 ENTRAM apenas no total geral da Visão
-    Geral/Relatório (mesmo padrão do agenda[] — só totals()/daily() no
-    app.js), nunca na quebra por campanha/conjunto/anúncio. Sem Messaging
+    3º funil, "Visitas ao Perfil" (E1-DIST, Alcance/Engajamento — o cliente
+    confirmou nao ser o mesmo funil E2-CAP deste dashboard). Traz Day/
+    Campaign Name/Ad Set Name/Ad Name/Impressions/Landing Page Views/Amount
+    Spent/Link Clicks/Reach — ja atribuivel por campanha/anuncio, tem sua
+    PROPRIA aba ("Funil Visitas ao Perfil") com quebra por campanha/conjunto/
+    anuncio, igual aos outros 2 funis. Gasto/Impressões/Cliques/Landing Page
+    Views tambem entram no total geral da Visão Geral/Relatório (mesmo
+    padrão do agenda[] — só totals()/daily() no app.js). Sem Messaging
     Conversations Started nem Pontuação — nao gera leads/MQL (é um funil de
-    Alcance/Engajamento de topo, nao de captura).
+    Alcance/Engajamento de topo, nao de captura, entao fica fora de
+    leads[]/da aba de leads qualificados).
 
 Nota sobre a aba "Leads" (28 linhas) da planilha de Leads: e' na verdade um
 registro POR AGENDAMENTO (Procedimento/Atendimento/Decisao/Investimento,
@@ -90,6 +94,8 @@ SHEET_LEADS = "Sessões"
 # Campanhas de Engajamento/WhatsApp (clique abre conversa direto, sem quiz) —
 # identificadas pela substring abaixo no Campaign Name do Meta Ads.
 ENGAJAMENTO_TAG = "ENGJ"
+# Campanhas de Quiz/LP (funil E2-CAP) — identificadas pela substring abaixo.
+QUIZ_TAG = "LEADS"
 SPREADSHEET_ID_AGENDA = "1cOD2Sa9fp8TPJrBia7RY3br_Htg5pCJc5squzmLY4Dk"
 SHEET_AGENDA = "Planilha agendamento"
 # gviz por NOME da aba (nao pelo gid) — funciona independente de qual posicao
@@ -255,6 +261,19 @@ def build_ad_struct(meta_rows, midx):
     return out
 
 
+def classify_funnel(campaign: str) -> str:
+    """Funil de cada linha de mídia paga, pelo Campaign Name — usado pra
+    separar as 3 abas "Funil ..." (Quiz/LP, WhatsApp/Engajamento, Visitas ao
+    Perfil) sem misturar dados de um funil no outro. "outros" é fallback pra
+    campanha fora da convenção (não aparece em nenhuma das 3 abas — só entra
+    no total geral da Visão Geral/Relatório)."""
+    if ENGAJAMENTO_TAG in campaign:
+        return "whatsapp"
+    if QUIZ_TAG in campaign:
+        return "quiz"
+    return "outros"
+
+
 # --------------------------------------------------------------------------- #
 # Processamento -> registros brutos
 # --------------------------------------------------------------------------- #
@@ -288,9 +307,10 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows):
         link = cell(row, midx["link"])
         if link and ad not in ad_links:
             ad_links[ad] = link
+        camp = cell(row, midx["campaign"]) or "(sem campanha)"
         meta.append({
             "d": parse_date(cell(row, midx["day"])),
-            "camp": cell(row, midx["campaign"]) or "(sem campanha)",
+            "camp": camp,
             "adset": cell(row, midx["adset"]) or "(sem conjunto)",
             "ad": ad,
             "sp": round(to_float(cell(row, midx["spent"])), 4),
@@ -299,17 +319,24 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows):
             "pv": to_float(cell(row, midx["pv"])),
             "ck": to_float(cell(row, midx["chk"])),
             "ml": to_float(cell(row, midx["leads"])),
+            # funil (Quiz/LP, WhatsApp/Engajamento, ou "outros" fora da
+            # convenção) — separa as abas "Funil ..." sem misturar dados.
+            "funnel": classify_funnel(camp),
         })
 
-    # "Página 2" — outro funil (E1-DIST, Alcance/Engajamento), não o E2-CAP
-    # deste dashboard. Mesmo já trazendo Campaign Name/Ad Set Name/Ad Name,
-    # o cliente pediu que essas métricas fiquem só no total geral (Visão
-    # Geral/Relatório), nunca na quebra por campanha/conjunto/anúncio da aba
-    # "Captura Meta Ads" (que é específica do funil E2-CAP) — ver nota no topo.
+    # "Página 2" — funil "Visitas ao Perfil" (E1-DIST, Alcance/Engajamento),
+    # não o E2-CAP deste dashboard. Traz Campaign Name/Ad Set Name/Ad Name
+    # (atribuível por anúncio, igual à Página 1) — vira sua PRÓPRIA aba
+    # "Funil Visitas ao Perfil", nunca misturada na quebra por campanha do
+    # E2-CAP (aba "Funil Quiz"/"Funil WhatsApp"). Sem "Messaging Conversations
+    # Started" nem Pontuação — não gera leads/MQL (funil de topo, não de
+    # captura), então não entra em leads[].
     mo_header = meta_other_rows[0] if meta_other_rows else []
     mo_idx = header_index(
         mo_header,
-        {"day": ["day", "data"], "spent": ["amount spent", "valor gasto", "gasto"],
+        {"day": ["day", "data"], "campaign": ["campaign name", "campaign"],
+         "adset": ["ad set name", "adset"], "ad": ["ad name"],
+         "spent": ["amount spent", "valor gasto", "gasto"],
          "impr": ["impressions", "impress"],
          "clicks": ["link clicks", "clicks", "cliques"],
          "pv": ["landing page views", "page views", "pageviews"]},
@@ -324,10 +351,14 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows):
             continue
         meta_other.append({
             "d": d,
+            "camp": cell(row, mo_idx["campaign"]) or "(sem campanha)",
+            "adset": cell(row, mo_idx["adset"]) or "(sem conjunto)",
+            "ad": cell(row, mo_idx["ad"]) or "(sem anúncio)",
             "sp": round(to_float(cell(row, mo_idx["spent"])), 4),
             "im": to_float(cell(row, mo_idx["impr"])),
             "cl": to_float(cell(row, mo_idx["clicks"])),
             "pv": to_float(cell(row, mo_idx["pv"])),
+            "funnel": "perfil",
         })
 
     # Leads = 2 fontes distintas, mantidas separáveis por "src" (o gráfico
@@ -565,9 +596,12 @@ def main():
     print(f"  periodo   : {b['date_min']} -> {b['date_max']}", file=sys.stderr)
     print(f"  leads     : {len(data['leads'])} (quiz/LP: {n_quiz}  whatsapp: {n_wa})  MQLs (Pontuação > 33): {q}", file=sys.stderr)
     print(f"  agenda    : {len(data['agenda'])} dias com dado  vendas: {vd}  faturamento: R$ {fat:,.2f}", file=sys.stderr)
-    print(f"  meta      : {len(data['meta'])} linhas", file=sys.stderr)
+    n_fq = sum(1 for m in data["meta"] if m["funnel"] == "quiz")
+    n_fw = sum(1 for m in data["meta"] if m["funnel"] == "whatsapp")
+    n_fo = sum(1 for m in data["meta"] if m["funnel"] == "outros")
+    print(f"  meta      : {len(data['meta'])} linhas (quiz: {n_fq}  whatsapp: {n_fw}  outros: {n_fo})", file=sys.stderr)
     mo_sp = sum(m["sp"] for m in data["meta_other"])
-    print(f"  meta_other: {len(data['meta_other'])} linhas  gasto: R$ {mo_sp:,.2f} (só entra no total geral)", file=sys.stderr)
+    print(f"  meta_other: {len(data['meta_other'])} linhas (funil Visitas ao Perfil)  gasto: R$ {mo_sp:,.2f}", file=sys.stderr)
     print(f"  out       : {args.out}", file=sys.stderr)
 
 

@@ -76,7 +76,7 @@ abas) — `build.py` lê cada uma por **nome da aba**, via endpoint `gviz`
 | Planilha | ID | Aba | Colunas usadas |
 |-----|-----|-----|----------------|
 | **Meta Ads** | `1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ` | `Página 1` | `Day` · `Campaign Name` · `Ad Set Name` · `Ad Name` · `Impressions` · `Link Clicks` · `Landing Page Views` · `Amount Spent` · `Messaging Conversations Started` (leads de WhatsApp/ENGJ — ver abaixo) (sem coluna de Checkout/Add to Cart nem Leads — ficam "-") |
-| **Meta Ads — Página 2** | (mesma planilha acima) | `Página 2` | `Day` · `Campaign Name` · `Ad Set Name` · `Ad Name` · `Impressions` · `Landing Page Views` · `Amount Spent` · `Link Clicks` · `Reach` — outro funil/conta (`DR. VINICIUS \| E1-DIST \| ... \| Alcance / Engajamento`; cliente confirmou não ser o mesmo funil E2-CAP). Já vem atribuível por campanha/anúncio, mas por pedido do cliente vira `DATA.meta_other[]` e entra só no Gasto/Impressões/Cliques/Landing Page Views da Visão Geral e do Relatório (`totals()`/`daily()`), **nunca** na quebra por campanha/conjunto/anúncio da aba "Captura Meta Ads" — que fica exclusiva do funil E2-CAP (Página 1). Sem "Messaging Conversations Started"/Pontuação — não gera leads/MQL. |
+| **Meta Ads — Página 2** | (mesma planilha acima) | `Página 2` | `Day` · `Campaign Name` · `Ad Set Name` · `Ad Name` · `Impressions` · `Landing Page Views` · `Amount Spent` · `Link Clicks` · `Reach` — outro funil/conta (`DR. VINICIUS \| E1-DIST \| ... \| Alcance / Engajamento`; cliente confirmou não ser o mesmo funil E2-CAP). Vira `DATA.meta_other[]`, com sua PRÓPRIA aba na dashboard ("Funil Visitas ao Perfil", quebra por campanha/conjunto/anúncio inclusa) — nunca misturada com as abas Quiz/WhatsApp (funil E2-CAP, Página 1). Gasto/Impressões/Cliques/Landing Page Views também entram no total geral da Visão Geral/Relatório (`totals()`/`daily()`). Sem "Messaging Conversations Started"/Pontuação — não gera leads/MQL. |
 | **Leads** (fonte única de leads) | `1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I` | `Sessões` | 1 linha por **sessão** do quiz/formulário de qualificação: `Início`/`Última atividade` · `Status` (`Em andamento`/`Enviou`/`Desqualificado`) · `Pontuação` (escore MQL) · `Origem` (nome do anúncio) · `Campanha` (raramente preenchida). Só linhas com `Status == "Enviou"` viram lead. |
 | **Agendamentos** | `1cOD2Sa9fp8TPJrBia7RY3br_Htg5pCJc5squzmLY4Dk` | `Planilha agendamento` | agregado **diário**: `Data` (DD/MM, sem ano) · `Agendamentos Confirmados` · `Cirurgias Confirmadas` · `Valor Total Cirurgias` |
 
@@ -267,16 +267,29 @@ python build/build.py --leads-file leads.csv --meta-file meta.csv --agenda-file 
 
 ## Especificação funcional (resumo)
 
-Três **páginas separadas** (sidebar):
+Cinco **páginas separadas** (sidebar):
 1. **Visão Geral de Leads** — funil vertical (Gasto → Impressões → Cliques → Leads →
    MQLs → Agendamentos → Vendas/Faturamento) + KPIs secundários; gráfico combinado
-   diário + tabela diária com heatmap (todos os leads); barras por origem/procedimento/
-   plataforma/procedimentos mais buscados.
-2. **Captura mídia paga** — funil em etapas; combinado diário; barras por utm_content;
-   tabela diária com heatmap (só mídia paga); 3 tabelas hierárquicas Campanha →
-   Conjunto → Anúncio, cada uma com gráfico de linha embaixo.
-3. **Relatório** — espelha a Visão Geral + painel de Metas editável + Top/Piores
-   Anúncios (17 colunas + Status) + Insights de Tráfego. Ver `build/GUIA-RELATORIOS.md`.
+   diário + tabela diária com heatmap (todos os leads, dos 3 funis somados + Página 2);
+   barras por origem/procedimento/plataforma/procedimentos mais buscados.
+2. **Funil Quiz/LP**, 3. **Funil WhatsApp/Engajamento**, 4. **Funil Visitas ao
+   Perfil** — 3 abas independentes (pedido do cliente: reportar cada funil sem
+   misturar números de um funil no outro). Cada uma tem seu PRÓPRIO funil em
+   etapas, combinado diário, tabela diária com heatmap, 3 tabelas hierárquicas
+   Campanha → Conjunto → Anúncio (cada uma com gráfico de linha embaixo) e
+   **filtro cruzado (clique numa linha) independente por página**
+   (`STATE.fun.quiz`/`.whatsapp`/`.perfil` em `app.js` — clicar numa campanha
+   no Funil Quiz nunca filtra o Funil WhatsApp). Quiz/WhatsApp vêm de `DATA.meta`
+   (`funnel` classificado em `build.py::classify_funnel` pelo Campaign Name:
+   tag "LEADS" ou "ENGJ") e têm Leads/MQLs/qualificação/CAC normalmente. Visitas
+   ao Perfil vem de `DATA.meta_other` (Página 2) inteiro — não gera lead/MQL
+   (funil de topo, não de captura) — por isso não tem as seções de MQL/
+   qualificação/CAC nem tabela de leads qualificados, e usa Cliques/CPC no
+   lugar de Leads/CPMQL nos gráficos (`comboChartAds`/`cpcByDimChart`).
+5. **Relatório** — espelha a Visão Geral (todos os funis somados) + painel de
+   Metas editável + Top/Piores Anúncios (17 colunas + Status, ranqueados entre
+   TODOS os anúncios de Quiz+WhatsApp juntos — não segue a separação por funil
+   das abas 2‑4) + Insights de Tráfego. Ver `build/GUIA-RELATORIOS.md`.
 
 **Ordem das colunas nas tabelas:** `Data · Dia · Gasto · CPM · CTR · ConvForm · Leads ·
 CPL · Tx‑MQL · MQLs · CPMQL · ConvMQL · Vendas · CAC · Fat. · Receita · ROAS`. Este
