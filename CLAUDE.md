@@ -69,7 +69,7 @@ puro + Chart.js via CDN) publicado no **GitHub Pages**, que cruza a lista de
 
 ## Fontes de dados (Google Sheets)
 
-Este cliente usa **3 planilhas SEPARADAS** (não uma central com múltiplas
+Este cliente usa **4 planilhas SEPARADAS** (não uma central com múltiplas
 abas) — `build.py` lê cada uma por **nome da aba**, via endpoint `gviz`
 (`.../gviz/tq?tqx=out:csv&sheet=<nome>`), então não depende de gid.
 
@@ -79,6 +79,7 @@ abas) — `build.py` lê cada uma por **nome da aba**, via endpoint `gviz`
 | **Meta Ads — Página 2** | (mesma planilha acima) | `Página 2` | `Day` · `Campaign Name` · `Ad Set Name` · `Ad Name` · `Impressions` · `Landing Page Views` · `Amount Spent` · `Link Clicks` · `Reach` — outro funil/conta (`DR. VINICIUS \| E1-DIST \| ... \| Alcance / Engajamento`; cliente confirmou não ser o mesmo funil E2-CAP). Vira `DATA.meta_other[]`, com sua PRÓPRIA aba na dashboard ("Funil Visitas ao Perfil", quebra por campanha/conjunto/anúncio inclusa) — nunca misturada com as abas Quiz/WhatsApp (funil E2-CAP, Página 1). Gasto/Impressões/Cliques/Landing Page Views também entram no total geral da Visão Geral/Relatório (`totals()`/`daily()`). Sem "Messaging Conversations Started"/Pontuação — não gera leads/MQL. |
 | **Leads** (fonte única de leads) | `1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I` | `Sessões` | 1 linha por **sessão** do quiz/formulário de qualificação: `Início`/`Última atividade` · `Status` (`Em andamento`/`Enviou`/`Desqualificado`) · `Pontuação` (escore MQL) · `Origem` (nome do anúncio) · `Campanha` (raramente preenchida). Só linhas com `Status == "Enviou"` viram lead. |
 | **Agendamentos** | `1cOD2Sa9fp8TPJrBia7RY3br_Htg5pCJc5squzmLY4Dk` | `Planilha agendamento` | agregado **diário**: `Data` (DD/MM, sem ano) · `Agendamentos Confirmados` · `Cirurgias Confirmadas` · `Valor Total Cirurgias` |
+| **Seguidores/Visitas ao Perfil** | `1P8ge3MO5jOZ415ObL_-noCy0G8-U8v7C-TV14aT6RGs` | **1 aba por mês**, nome em pt-BR (ex. `Setembro`) — `build.py` sempre lê a aba do **mês corrente do build** (`MESES_PT`/`main()`); meses passados em abas antigas não aparecem (limitação conhecida) | agregado **diário** preenchido à mão pelo cliente (Adveronix cobra à parte por essas 2 métricas): `Data` (DD/MM/AAAA — parser dedicado `parse_date_br()`, nunca `parse_date()`, que tentaria mm/dd primeiro e erraria os dias 1-12) · `Invest. (R$)` · `Seguid.` (seguidores ganhos no dia) · `Visitas ao perfil`. Cabeçalho tem células mescladas com texto longo — `header_index()` usada só com fallback posicional (colunas 1/3/4/6), nunca por alias. Vira `DATA.seguidores[]`, só no funil "Visitas ao Perfil" (`app.js::segTotals()`/`renderFunilPerfil`) — agregado da conta inteira, sem atribuição por anúncio, então só entra no card do funil e na tabela diária dessa aba, nunca nas 3 tabelas Campanha→Conjunto→Anúncio nem na Visão Geral/Relatório. Custo por Seguidor/Custo Por Visita usam o **Investimento desta própria planilha** (não o Gasto da Página 2), pra bater com o que o cliente já vê lá. |
 
 > ⚠️ **Não confundir** com a aba **"Leads"** (28 linhas, mesma planilha de
 > Sessões) — apesar do nome, ela é na verdade um registro **por agendamento**
@@ -173,7 +174,7 @@ não filtra por esse prefixo — mantém TODAS as campanhas no dashboard.
 ## Arquitetura / arquivos
 
 ```
-build/build.py            # lê os CSVs (read-only) de 3 planilhas separadas, emite REGISTROS BRUTOS (leads[]/meta[]/agenda[]/ad_links); render() COSTURA os 4 arquivos abaixo
+build/build.py            # lê os CSVs (read-only) de 4 planilhas separadas, emite REGISTROS BRUTOS (leads[]/meta[]/agenda[]/meta_other[]/seguidores[]/ad_links); render() COSTURA os 4 arquivos abaixo
 build/template.html       # esqueleto HTML. Placeholders __STYLES__, __APP_JS__, __DATA_JSON__, __BUILD_ID__, __GENERATED_BRT__
 build/identidade-visual.css  # TODAS as cores (tema claro=padrão / escuro). Mexa AQUI p/ trocar só cor
 build/estilos.css         # layout/componentes (sidebar, topbar, period-picker, funil, tabelas, gráficos, aba Relatório)
@@ -286,7 +287,11 @@ Cinco **páginas separadas** (sidebar):
    ao Perfil vem de `DATA.meta_other` (Página 2) inteiro — não gera lead/MQL
    (funil de topo, não de captura) — por isso não tem as seções de MQL/
    qualificação/CAC nem tabela de leads qualificados, e usa Cliques/CPC no
-   lugar de Leads/CPMQL nos gráficos (`comboChartAds`/`cpcByDimChart`).
+   lugar de Leads/CPMQL nos gráficos (`comboChartAds`/`cpcByDimChart`). Card
+   do funil e tabela diária também trazem Seguidores/Custo por Seguidor e
+   Visitas ao Perfil/Custo Por Visita no Perfil (`DATA.seguidores[]`,
+   planilha manual à parte — ver "Fontes de dados"), sem atribuição por
+   anúncio (não entram nas 3 tabelas hierárquicas).
 5. **Relatório** — espelha a Visão Geral (todos os funis somados) + painel de
    Metas editável + Top/Piores Anúncios (17 colunas + Status, ranqueados entre
    TODOS os anúncios de Quiz+WhatsApp juntos — não segue a separação por funil

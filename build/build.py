@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Gera a dashboard estatica (index.html) a partir de 3 planilhas Google Sheets
+Gera a dashboard estatica (index.html) a partir de 4 planilhas Google Sheets
 SEPARADAS do cliente Dr. Vinicius:
 
   - Leads (aba "Sessões"): fonte UNICA de leads — 1 linha por sessao do
@@ -41,6 +41,14 @@ SEPARADAS do cliente Dr. Vinicius:
     Conversations Started nem Pontuação — nao gera leads/MQL (é um funil de
     Alcance/Engajamento de topo, nao de captura, entao fica fora de
     leads[]/da aba de leads qualificados).
+  - Seguidores/Visitas ao Perfil (planilha separada, 1 aba por mes nomeada
+    em pt-BR — ex. "Setembro"): Adveronix cobra a parte por essas 2
+    metricas entao o cliente preenche a mao (Investimento/Seguidores
+    ganhos/Visitas ao Perfil, 1 linha por dia). So funil "Visitas ao
+    Perfil" (agregado diario da conta inteira, sem atribuicao por
+    campanha/anuncio — nao entra em nenhuma tabela hierarquica). Cada
+    build le so a aba do MES CORRENTE (limitacao conhecida: meses
+    passados em abas antigas nao aparecem).
 
 Nota sobre a aba "Leads" (28 linhas) da planilha de Leads: e' na verdade um
 registro POR AGENDAMENTO (Procedimento/Atendimento/Decisao/Investimento,
@@ -98,6 +106,15 @@ ENGAJAMENTO_TAG = "ENGJ"
 QUIZ_TAG = "LEADS"
 SPREADSHEET_ID_AGENDA = "1cOD2Sa9fp8TPJrBia7RY3br_Htg5pCJc5squzmLY4Dk"
 SHEET_AGENDA = "Planilha agendamento"
+# Planilha de Seguidores/Visitas ao Perfil (funil "Visitas ao Perfil") —
+# preenchida manualmente pelo cliente (Adveronix cobra à parte por essas 2
+# métricas). 1 aba POR MÊS, nomeada pelo mês em português (ex. "Setembro"),
+# 1 linha por dia. build.py sempre lê a aba do mês corrente do build — ver
+# `MESES_PT`/uso em main(). Só mostra o mês corrente; meses passados em
+# abas antigas não entram (limitação conhecida, aceitável por enquanto).
+SPREADSHEET_ID_SEGUIDORES = "1P8ge3MO5jOZ415ObL_-noCy0G8-U8v7C-TV14aT6RGs"
+MESES_PT = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho",
+            "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 # gviz por NOME da aba (nao pelo gid) — funciona independente de qual posicao
 # a aba ocupa na planilha, so exige que a planilha esteja "qualquer um com o
 # link pode ver".
@@ -198,6 +215,20 @@ def parse_date(v: str) -> str | None:
     return None
 
 
+def parse_date_br(v: str) -> str | None:
+    """dd/mm/aaaa — planilha de Seguidores/Visitas ao Perfil, digitada à mão
+    em pt-BR. Parser dedicado (não usa parse_date()): parse_date() tenta
+    mm/dd/aaaa PRIMEIRO, o que erraria silenciosamente pros dias 1-12
+    (ex. "01/09/2026" viraria 9 de janeiro em vez de 1º de setembro)."""
+    m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})$", (v or "").strip())
+    if not m:
+        return None
+    dd, mm, yyyy = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if not (1 <= mm <= 12 and 1 <= dd <= 31):
+        return None
+    return f"{yyyy:04d}-{mm:02d}-{dd:02d}"
+
+
 def is_qualified(v: str | None) -> bool:
     """Critério de MQL deste cliente: coluna "Pontuação" (aba Sessões) > 33."""
     return to_float(v) > 33
@@ -277,7 +308,7 @@ def classify_funnel(campaign: str) -> str:
 # --------------------------------------------------------------------------- #
 # Processamento -> registros brutos
 # --------------------------------------------------------------------------- #
-def process(leads_rows, meta_rows, agenda_rows, meta_other_rows):
+def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows):
     mheader = meta_rows[0] if meta_rows else []
     midx = header_index(
         mheader,
@@ -482,9 +513,33 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows):
             continue
         agenda.append({"d": d, "agendamentos": agendamentos, "vendas": cirurgias, "fat": round(fat, 2)})
 
+    # Seguidores/Visitas ao Perfil — planilha separada, preenchida manualmente
+    # (1 linha/dia: Investimento (R$), Seguidores ganhos, Visitas ao Perfil).
+    # Cabeçalho da planilha tem células mescladas com texto longo (não dá pra
+    # confiar em match por alias — ex. a coluna de Investimento contém a
+    # palavra "Seguidores" no meio do texto) — por isso só posição fixa.
+    sgheader = seguidores_rows[0] if seguidores_rows else []
+    sgidx = header_index(
+        sgheader, {"date": [], "invest": [], "seguidores": [], "visitas": []},
+        {"date": 1, "invest": 3, "seguidores": 4, "visitas": 6},
+    )
+    seguidores = []
+    for row in seguidores_rows[1:]:
+        if not any((c or "").strip() for c in row):
+            continue
+        d = parse_date_br(cell(row, sgidx["date"]))
+        if not d or d > today_str:
+            continue
+        inv = to_float(cell(row, sgidx["invest"]))
+        seg = to_float(cell(row, sgidx["seguidores"]))
+        vis = to_float(cell(row, sgidx["visitas"]))
+        if inv == 0 and seg == 0 and vis == 0:
+            continue
+        seguidores.append({"d": d, "inv": round(inv, 4), "seg": seg, "vis": vis})
+
     dates = sorted({d for d in (
         [l["d"] for l in leads if l["d"]] + [m["d"] for m in meta if m["d"]] + [a["d"] for a in agenda if a["d"]]
-        + [m["d"] for m in meta_other if m["d"]]
+        + [m["d"] for m in meta_other if m["d"]] + [s["d"] for s in seguidores if s["d"]]
     )})
     return {
         "build": {
@@ -507,6 +562,7 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows):
         "sales": [],   # sem aba de Compradores neste cliente — vendas vêm de agenda[]
         "agenda": agenda,
         "meta_other": meta_other,   # "Página 2" — só totals()/daily(), nunca buildAgg()
+        "seguidores": seguidores,   # planilha manual — só funil "Visitas ao Perfil", sem atribuição por anúncio
         "ad_links": ad_links,
         # Insights de Tráfego (texto pré-escrito, lido de relatorios.json). Preenchido
         # em main() via load_briefings(); fica {} se relatorios.json não existir.
@@ -566,6 +622,7 @@ def main():
     ap.add_argument("--meta-file", help="CSV local da aba Meta Ads (Página 1)")
     ap.add_argument("--agenda-file", help="CSV local da aba Planilha agendamento")
     ap.add_argument("--meta-other-file", help="CSV local da aba Página 2 (gasto/impressões sem atribuição de campanha)")
+    ap.add_argument("--seguidores-file", help="CSV local da aba de Seguidores/Visitas ao Perfil (mês corrente, preenchida à mão)")
     ap.add_argument("--template", default="build/template.html")
     ap.add_argument("--out", default="dist/index.html")
     args = ap.parse_args()
@@ -574,8 +631,10 @@ def main():
     leads_rows = load_rows(sheet_url(SPREADSHEET_ID_LEADS, SHEET_LEADS), args.leads_file)
     agenda_rows = load_rows(sheet_url(SPREADSHEET_ID_AGENDA, SHEET_AGENDA), args.agenda_file)
     meta_other_rows = load_rows(sheet_url(SPREADSHEET_ID_META, SHEET_META_OTHER), args.meta_other_file)
+    sheet_seguidores = MESES_PT[datetime.now(BRT).month - 1]
+    seguidores_rows = load_rows(sheet_url(SPREADSHEET_ID_SEGUIDORES, sheet_seguidores), args.seguidores_file)
 
-    data = process(leads_rows, meta_rows, agenda_rows, meta_other_rows)
+    data = process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows)
 
     # Insights de Tráfego (texto pré-escrito) — lidos do arquivo versionado ao
     # lado do template. Sem chamada de API no build.
@@ -602,6 +661,10 @@ def main():
     print(f"  meta      : {len(data['meta'])} linhas (quiz: {n_fq}  whatsapp: {n_fw}  outros: {n_fo})", file=sys.stderr)
     mo_sp = sum(m["sp"] for m in data["meta_other"])
     print(f"  meta_other: {len(data['meta_other'])} linhas (funil Visitas ao Perfil)  gasto: R$ {mo_sp:,.2f}", file=sys.stderr)
+    n_seg = len(data["seguidores"])
+    tot_seg = sum(s["seg"] for s in data["seguidores"])
+    tot_vis = sum(s["vis"] for s in data["seguidores"])
+    print(f"  seguidores: aba {sheet_seguidores!r}  {n_seg} dias com dado  seguidores: {tot_seg:.0f}  visitas ao perfil: {tot_vis:.0f}", file=sys.stderr)
     print(f"  out       : {args.out}", file=sys.stderr)
 
 
