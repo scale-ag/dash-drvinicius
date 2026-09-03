@@ -1014,14 +1014,14 @@ function dailyCells(x,d,isTotal){
     convmql:s.convmql, vendas:s.vendas, cac:s.cac, fat:s.fat, receita:s.receita, roas:s.roas};
 }
 /* colunas da tabela diária do funil "Visitas ao Perfil" — sem Leads/MQL/Vendas
-   (esse funil não gera lead — ver build.py), então essas colunas nem aparecem
-   (em vez de mostrar "-" pra sempre, mesmo padrão do Checkout removido de
-   DAILY_COLS pra este cliente). */
+   (esse funil não gera lead — ver build.py) nem Page Views/CR/CPV (pedido do
+   cliente — some da sessão inteira, não só do card do funil), então essas
+   colunas nem aparecem (em vez de mostrar "-" pra sempre, mesmo padrão do
+   Checkout removido de DAILY_COLS pra este cliente). */
 const DAILY_COLS_ADS=[
   {key:'date',label:'Data',type:'date'},{key:'wd',label:'Dia',type:'dim',w:70},
   {key:'gasto',label:'Gasto',type:'brl',heat:'gasto'},{key:'cpm',label:'CPM',type:'brl'},
   {key:'cliques',label:'Cliques',type:'int'},{key:'ctr',label:'CTR',type:'pct'},{key:'cpc',label:'CPC',type:'brl'},
-  {key:'pv',label:'Page Views',type:'int'},{key:'cr',label:'CR',type:'pct'},{key:'cpv',label:'CPV',type:'brl'},
 ];
 function dailyCellsAds(x,d,isTotal){
   return {date:isTotal?null:x.d, wd:isTotal?'':weekday(x.d), gasto:d.gasto, cpm:d.cpm,
@@ -1177,7 +1177,6 @@ function renderFunilPerfil(funil, ids){
     ['Gasto Total', brl(g), [], false, 'hl-gasto'],
     ['Impressões', intf(t.im), [['CPM',brl(dv.cpm)]]],
     ['Cliques', intf(t.cl), [['CTR',pct(dv.ctr)],['CPC',brl(dv.cpc)]]],
-    ['Page Views', intf(t.pv), [['CR',pct(dv.cr)],['CPV',brl(dv.cpv)]]],
     ['Seguidores', intf(st.seg), [['Custo por Seguidor',brl(st.cps)]]],
     ['Visitas ao Perfil', intf(st.vis), [['Custo Por Visita no Perfil',brl(st.cpv)]]],
   ];
@@ -1205,7 +1204,6 @@ function renderFunilPerfil(funil, ids){
     {key:'dim',label:'',type:'dim',big:true,band:'l'},{key:'gasto',label:'Gasto',type:'brl',band:'l'},
     {key:'cpm',label:'CPM',type:'brl'},{key:'cliques',label:'Cliques',type:'int'},
     {key:'ctr',label:'CTR',type:'pct'},{key:'cpc',label:'CPC',type:'brl'},
-    {key:'pv',label:'Page Views',type:'int'},{key:'cr',label:'CR',type:'pct'},{key:'cpv',label:'CPV',type:'brl'},
   ];
   function hierRows(map){ return Object.entries(map).map(([k,a])=>{const d=derive(a);
     return {k, cells:{dim:k,gasto:d.gasto,cpm:d.cpm,cliques:a.cl,ctr:d.ctr,cpc:d.cpc,pv:a.pv,cr:d.cr,cpv:d.cpv}};}); }

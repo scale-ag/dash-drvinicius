@@ -287,7 +287,10 @@ Cinco **páginas separadas** (sidebar):
    ao Perfil vem de `DATA.meta_other` (Página 2) inteiro — não gera lead/MQL
    (funil de topo, não de captura) — por isso não tem as seções de MQL/
    qualificação/CAC nem tabela de leads qualificados, e usa Cliques/CPC no
-   lugar de Leads/CPMQL nos gráficos (`comboChartAds`/`cpcByDimChart`). Card
+   lugar de Leads/CPMQL nos gráficos (`comboChartAds`/`cpcByDimChart`). Este
+   cliente **não tem** Page Views/CR nessa aba (pedido — removidas do card do
+   funil, tabela diária e das 3 tabelas hierárquicas; `DAILY_COLS_ADS`/`hcols`
+   em `renderFunilPerfil` ficam só com Gasto/CPM/Cliques/CTR/CPC). Card
    do funil e tabela diária também trazem Seguidores/Custo por Seguidor e
    Visitas ao Perfil/Custo Por Visita no Perfil (`DATA.seguidores[]`,
    planilha manual à parte — ver "Fontes de dados"), sem atribuição por
