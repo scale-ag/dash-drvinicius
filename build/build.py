@@ -111,7 +111,7 @@ MAIN_PRODUCT = "Captação de Leads"
 MAIN_PRODUCT_PREFIX = "DR. VINICIUS | E2-CAP"
 
 BRT = timezone(timedelta(hours=-3))   # horario de Brasilia (exibicao)
-TAX_FACTOR = 1.0   # sem imposto de mídia informado para este cliente
+TAX_FACTOR = 1.1385   # imposto da mídia paga informado pelo cliente (13,85%)
 
 # --------------------------------------------------------------------------- #
 # Regras da aba Relatório (Top/Piores anúncios)

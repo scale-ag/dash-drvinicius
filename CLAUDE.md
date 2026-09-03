@@ -157,10 +157,11 @@ o Top Anúncios (Relatório) mostram Agendamentos/Vendas/Faturamento como "-"
 (caem de volta ao critério de MQLs).
 
 ### Imposto da mídia paga
-`TAX_FACTOR = 1.0` em `build.py` (sem imposto informado para este cliente). O
+`TAX_FACTOR = 1.1385` em `build.py` (13,85%, informado pelo cliente). O
 toggle "Imposto Meta" fica **ativo por padrão** (`STATE.tax=true` em
-`app.js`); com `TAX_FACTOR = 1.0` o toggle não muda nada. Se o cliente
-informar um fator depois, edite a constante (ex. `1.13806` para 13,806%).
+`app.js`) — com o toggle ligado, todo Gasto exibido (funil, KPIs, tabelas,
+gráficos) é multiplicado por esse fator; desligando, mostra o gasto bruto da
+planilha. Se o fator mudar, edite a constante.
 
 ### Convenções de campanha (do cliente)
 Todas as campanhas observadas usam o prefixo `DR. VINICIUS | E2-CAP`

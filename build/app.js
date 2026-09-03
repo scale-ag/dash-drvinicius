@@ -1061,6 +1061,12 @@ function renderFunil(funil){
 /* Funil Quiz/LP e Funil WhatsApp/Engajamento — mesma estrutura de sempre
    (era a antiga "Captura Meta Ads"), só que escopada a UM funil por vez. */
 function renderFunilLeads(funil, ids){
+  // Funil WhatsApp/Engajamento (só ele — pedido do cliente): "Leads" vira
+  // "Conversas iniciadas no WhatsApp" e some Page Views/CR/ConvLP/CPV/
+  // Tx‑MQL/CPMQL (métricas de formulário/LP e de qualificação individual que
+  // não existem pra conversa de WhatsApp — MQL de whatsapp é sempre 0).
+  const isWa = funil==='whatsapp';
+  const leadsLabel = isWa ? 'Conversas iniciadas no WhatsApp' : 'Leads';
   const F=funilScope(funil,null), fL=F.fL, fM=F.fM, fS=F.fS;
   const t=totals(fL,fM,fS), dv=derive(t), g=dv.gasto;
   const NA='<span class="na-tag">sem dado</span>';
@@ -1069,13 +1075,15 @@ function renderFunilLeads(funil, ids){
     ['Gasto Total', brl(g), [], false, 'hl-gasto'],
     ['Impressões', intf(t.im), [['CPM',brl(dv.cpm)],['Frequência',NA]]],
     ['Cliques', intf(t.cl), [['CTR',pct(dv.ctr)],['CPC',brl(dv.cpc)]]],
-    ['Page Views', intf(t.pv), [['CR',pct(dv.cr)],['CPV',brl(dv.cpv)]]],
-    ['Leads', intf(t.leads), [['CPL',brl(dv.cpl)],['ConvLP',pct(dv.convlp)]]],
-    ['MQLs (Pontuação > 33)', intf(t.mqls), [['Tx‑MQL',pct(dv.tx)],['CPMQL',brl(dv.cpmql)]], false, 'hl-mql'],
+  ];
+  if(!isWa) steps.push(['Page Views', intf(t.pv), [['CR',pct(dv.cr)],['CPV',brl(dv.cpv)]]]);
+  steps.push([leadsLabel, intf(t.leads), isWa?[['CPL',brl(dv.cpl)]]:[['CPL',brl(dv.cpl)],['ConvLP',pct(dv.convlp)]]]);
+  steps.push(['MQLs (Pontuação > 33)', intf(t.mqls), isWa?[]:[['Tx‑MQL',pct(dv.tx)],['CPMQL',brl(dv.cpmql)]], false, 'hl-mql']);
+  steps.push(
     ['Vendas', s.vendas!=null?intf(s.vendas):NA, [['ConvMQL',s.convmql!=null?pct(s.convmql):NA],['CAC',s.cac!=null?brl(s.cac):NA]], s.vendas==null],
     ['Receita', s.receita!=null?brl(s.receita):NA, [['ROAS',s.roasReceita!=null?numf(s.roasReceita):NA],['Ticket',s.tmReceita!=null?brl(s.tmReceita):NA]], s.receita==null, 'hl-fat'],
     ['Faturamento', s.fat!=null?brl(s.fat):NA, [['ROAS',s.roas!=null?numf(s.roas):NA],['Ticket',s.tm!=null?brl(s.tm):NA]], s.fat==null, 'hl-fat'],
-  ];
+  );
   document.getElementById(ids.funnel).innerHTML=funnelHTML(steps);
 
   comboChart(ids.combo, daily(fL,fM,fS));
@@ -1094,23 +1102,27 @@ function renderFunilLeads(funil, ids){
     rows:topCacRows});
 
   const dl=daily(fL,fM,fS).slice().reverse();
-  renderTable({id:ids.daily, cols:DAILY_COLS, center:true, fit:true,
+  const dailyCols = isWa
+    ? DAILY_COLS.filter(c=>!['cr','convlp','tx','cpmql'].includes(c.key)).map(c=>c.key==='leads'?{...c,label:leadsLabel}:c)
+    : DAILY_COLS;
+  renderTable({id:ids.daily, cols:dailyCols, center:true, fit:true,
     rows:dl.map(x=>{const d=derive(x); return {k:x.d, cells:dailyCells(x,d)};}),
     total:(()=>{const d=derive(t);return dailyCells({...t,d:null},d,true);})(),
     selectable:true, selSet:STATE.selDays,
     onSelect:(k,e)=>{ toggleSet(STATE.selDays,k,e&&(e.ctrlKey||e.metaKey)); syncDateInputs(); renderAll(); },
   });
 
-  const hcols=[
+  const hcolsAll=[
     {key:'dim',label:'',type:'dim',big:true,band:'l'},{key:'gasto',label:'Gasto',type:'brl',band:'l'},
     {key:'cpm',label:'CPM',type:'brl'},
     {key:'ctr',label:'CTR',type:'pct'},{key:'cr',label:'CR',type:'pct'},{key:'convlp',label:'ConvLP',type:'pct'},
-    {key:'leads',label:'Leads',type:'int'},{key:'cpl',label:'CPL',type:'brl'},
+    {key:'leads',label:leadsLabel,type:'int'},{key:'cpl',label:'CPL',type:'brl'},
     {key:'tx',label:'Tx‑MQL',type:'pct'},
     {key:'mqls',label:'MQLs',type:'int'},{key:'cpmql',label:'CPMQL',type:'brl'},
     {key:'convmql',label:'ConvMQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int'},{key:'cac',label:'CAC',type:'brl'},
     {key:'fat',label:'Fat.',type:'brl'},{key:'receita',label:'Receita',type:'brl'},{key:'roas',label:'ROAS',type:'num'},
   ];
+  const hcols = isWa ? hcolsAll.filter(c=>!['cr','convlp','tx','cpmql'].includes(c.key)) : hcolsAll;
   function hierRows(map){ return Object.entries(map).map(([k,a])=>{const d=derive(a),s=salesOf(a);
     return {k, cells:{dim:k,gasto:d.gasto,cpm:d.cpm,ctr:d.ctr,cr:d.cr,convlp:d.convlp,leads:a.leads,cpl:d.cpl,tx:d.tx,mqls:a.mqls,cpmql:d.cpmql,
       convmql:s.convmql,vendas:s.vendas,cac:s.cac,fat:s.fat,receita:s.receita,roas:s.roas}};}); }
