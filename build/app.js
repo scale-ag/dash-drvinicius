@@ -668,8 +668,8 @@ function renderGeralCore(ids, isGeral){
     ['Gasto Total', brl(g), [], false, 'hl-gasto'],
     ['Impressões', intf(t.im), [['CPM',brl(dv.cpm)]]],
     ['Cliques', intf(t.cl), [['CTR',pct(dv.ctr)],['CPC',brl(dv.cpc)]]],
-    ['Page Views', intf(t.pv), [['CR',pct(dv.cr)],['CPV',brl(dv.cpv)]]],
-    ['Leads', intf(t.leads), [['CPL',brl(dv.cpl)],['ConvLP',pct(dv.convlp)]]],
+    ['Page Views', intf(t.pv), isGeral?[]:[['CR',pct(dv.cr)],['CPV',brl(dv.cpv)]]],
+    ['Leads', intf(t.leads), isGeral?[['CPL',brl(dv.cpl)]]:[['CPL',brl(dv.cpl)],['ConvLP',pct(dv.convlp)]]],
     ['MQLs (Pontuação > 33)', intf(t.mqls), [['Tx‑MQL',pct(dv.tx)],['CPMQL',brl(dv.cpmql)]], false, 'hl-mql'],
     ['Agendamentos', s.agendamentos!=null?intf(s.agendamentos):NA, [['Tx‑Agend',s.txag!=null?pct(s.txag):NA],['Custo/Agend',s.cpag!=null?brl(s.cpag):NA]], s.agendamentos==null],
   ];
@@ -717,7 +717,8 @@ function renderGeralCore(ids, isGeral){
   hbar(ids.prof, Object.entries(byPr).map(([label,leads])=>({label,leads})), x=>x.leads, ()=>cvar('--chart-mqls'), 10);
   // tabela diaria (todos os leads), ultimo dia no topo + heatmap
   const dl=daily(fL,fM,fS,fA,fMO).slice().reverse();
-  renderTable({id:ids.daily, cols:DAILY_COLS, center:true, fit:true,
+  const dailyCols = isGeral ? DAILY_COLS.filter(c=>!['cr','convlp'].includes(c.key)) : DAILY_COLS;
+  renderTable({id:ids.daily, cols:dailyCols, center:true, fit:true,
     rows:dl.map(x=>{const d=derive(x); return {k:x.d, cells:dailyCells(x,d)};}),
     total:(()=>{const d=derive(t);return dailyCells({...t,d:null},d,true);})(),
     selectable:true, selSet:STATE.selDays,
