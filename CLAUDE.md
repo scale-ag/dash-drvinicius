@@ -270,10 +270,17 @@ python build/build.py --leads-file leads.csv --meta-file meta.csv --agenda-file 
 ## Especificação funcional (resumo)
 
 Cinco **páginas separadas** (sidebar):
-1. **Visão Geral de Leads** — funil vertical (Gasto → Impressões → Cliques → Leads →
-   MQLs → Agendamentos → Vendas/Faturamento) + KPIs secundários; gráfico combinado
-   diário + tabela diária com heatmap (todos os leads, dos 3 funis somados + Página 2);
-   barras por origem/procedimento/plataforma/procedimentos mais buscados.
+1. **Visão Geral de Leads** — funil vertical (Gasto → Impressões → Cliques → Page
+   Views → Leads → MQLs → Agendamentos → Faturamento) + KPIs secundários; gráfico
+   combinado diário + tabela diária com heatmap; barras por origem/procedimento/
+   plataforma/procedimentos mais buscados. Soma **só Quiz + WhatsApp** (Página 1,
+   os 2 funis de captura de lead) — Página 2/Visitas ao Perfil (distribuição/
+   alcance, não captura) fica de fora da soma (pedido do cliente: não é
+   comparável com os outros 2 funis). Sem os steps Vendas/Receita (ConvMQL/CAC/
+   ROAS/Ticket) — "Receita" nunca tem dado nesse cliente (sem aba de
+   Compradores) e "Vendas" ficou redundante com Agendamentos/Faturamento que já
+   ficam. `renderGeralCore(ids, isGeral)` em `app.js`: `isGeral=true` só na
+   Visão Geral, controla os dois comportamentos.
 2. **Funil Quiz/LP**, 3. **Funil WhatsApp/Engajamento**, 4. **Funil Visitas ao
    Perfil** — 3 abas independentes (pedido do cliente: reportar cada funil sem
    misturar números de um funil no outro). Cada uma tem seu PRÓPRIO funil em
@@ -295,7 +302,10 @@ Cinco **páginas separadas** (sidebar):
    Visitas ao Perfil/Custo Por Visita no Perfil (`DATA.seguidores[]`,
    planilha manual à parte — ver "Fontes de dados"), sem atribuição por
    anúncio (não entram nas 3 tabelas hierárquicas).
-5. **Relatório** — espelha a Visão Geral (todos os funis somados) + painel de
+5. **Relatório** — espelha a Visão Geral **como ela era antes do item 1**
+   (`renderGeralCore(REL_IDS)`, sem `isGeral`) — continua somando os 3 funis
+   (Quiz+WhatsApp+Página 2) e com os steps Vendas/Receita, por pedido explícito
+   do cliente de não alterar o Relatório. + painel de
    Metas editável + Top/Piores Anúncios (17 colunas + Status, ranqueados entre
    TODOS os anúncios de Quiz+WhatsApp juntos — não segue a separação por funil
    das abas 2‑4) + Insights de Tráfego. Ver `build/GUIA-RELATORIOS.md`.

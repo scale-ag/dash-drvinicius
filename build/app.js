@@ -648,9 +648,19 @@ function kpiCard(k){ return `<div class="kpi ${k.hero?'hero':''}"><div class="kl
    MESMO corpo (renderGeralCore), só mudam os alvos no DOM. */
 const GERAL_IDS={funnel:'geralFunnel',kpis2:'geralKpis2',combo:'gCombo',source:'gSource',bucket:'gBucket',plat:'gPlat',prof:'gProf',daily:'gDaily'};
 const REL_IDS  ={funnel:'relFunnel', kpis2:'relKpis2', combo:'rCombo',source:'rSource',bucket:'rBucket',plat:'rPlat',prof:'rProf',daily:'rDaily'};
-function renderGeral(){ renderGeralCore(GERAL_IDS); }
-function renderGeralCore(ids){
-  const fL=leadsActive(), fM=metaActive(), fS=salesActive(), fA=agendaActive(), fMO=metaOtherActive();
+function renderGeral(){ renderGeralCore(GERAL_IDS, true); }
+/* isGeral=true (só Visão Geral, NUNCA o Relatório — pedido do cliente):
+   - fMO (Página 2 / funil Visitas ao Perfil) fica fora de totals()/daily();
+     Visão Geral passa a somar só Quiz+WhatsApp (Página 1), os 2 funis de
+     captura de lead — Visitas ao Perfil é distribuição/alcance, não é
+     comparável com os outros 2 na mesma soma.
+   - Some os steps "Vendas"/"Receita" do funil (ConvMQL/CAC/ROAS/Ticket) —
+     "Receita" nunca tem dado nesse cliente (não há aba de Compradores, só
+     DATA.sales=[]) e "Vendas" fica redundante com Agendamentos/Faturamento
+     que já ficam. */
+function renderGeralCore(ids, isGeral){
+  const fL=leadsActive(), fM=metaActive(), fS=salesActive(), fA=agendaActive();
+  const fMO = isGeral ? [] : metaOtherActive();
   const t=totals(fL,fM,fS,fA,fMO), dv=derive(t), g=dv.gasto;
   const NA='<span class="na-tag">sem dado</span>';
   const s=salesOf(t);
@@ -662,10 +672,12 @@ function renderGeralCore(ids){
     ['Leads', intf(t.leads), [['CPL',brl(dv.cpl)],['ConvLP',pct(dv.convlp)]]],
     ['MQLs (Pontuação > 33)', intf(t.mqls), [['Tx‑MQL',pct(dv.tx)],['CPMQL',brl(dv.cpmql)]], false, 'hl-mql'],
     ['Agendamentos', s.agendamentos!=null?intf(s.agendamentos):NA, [['Tx‑Agend',s.txag!=null?pct(s.txag):NA],['Custo/Agend',s.cpag!=null?brl(s.cpag):NA]], s.agendamentos==null],
+  ];
+  if(!isGeral) steps.push(
     ['Vendas', s.vendas!=null?intf(s.vendas):NA, [['ConvMQL',s.convmql!=null?pct(s.convmql):NA],['CAC',s.cac!=null?brl(s.cac):NA]], s.vendas==null],
     ['Receita', s.receita!=null?brl(s.receita):NA, [['ROAS',s.roasReceita!=null?numf(s.roasReceita):NA],['Ticket',s.tmReceita!=null?brl(s.tmReceita):NA]], s.receita==null, 'hl-fat'],
-    ['Faturamento', s.fat!=null?brl(s.fat):NA, [['ROAS',s.roas!=null?numf(s.roas):NA],['Ticket',s.tm!=null?brl(s.tm):NA]], s.fat==null, 'hl-fat'],
-  ];
+  );
+  steps.push(['Faturamento', s.fat!=null?brl(s.fat):NA, [['ROAS',s.roas!=null?numf(s.roas):NA],['Ticket',s.tm!=null?brl(s.tm):NA]], s.fat==null, 'hl-fat']);
   document.getElementById(ids.funnel).innerHTML=funnelHTML(steps);
   // ---- Mar05: métricas secundárias mais úteis (não repetem o funil) ----
   const dd=daily(fL,fM,fS,fA,fMO), nDays=dd.length||1;
