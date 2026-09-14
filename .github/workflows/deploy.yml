@@ -13,6 +13,7 @@ on:
     branches: [ main ]
     paths:
       - "build/**"
+      - "quiz/**"
       - ".github/workflows/deploy.yml"
 
 # Somente leitura do repo + permissao para publicar no Pages
@@ -43,6 +44,14 @@ jobs:
 
       - name: Build dashboard (le as planilhas via CSV publico, somente leitura)
         run: python build/build.py --out dist/index.html
+
+      # Publica o quiz de pre-atendimento em <pages>/quiz/ — URL sob controle da
+      # agencia, para testar o pixel e, quando validado, substituir a do Netlify
+      # da conta antiga nos anuncios. Nao altera a dashboard, que segue na raiz.
+      - name: Publicar quiz em /quiz/
+        run: |
+          mkdir -p dist/quiz
+          cp quiz/index.html dist/quiz/index.html
 
       - name: Add .nojekyll
         run: touch dist/.nojekyll

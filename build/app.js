@@ -672,7 +672,7 @@ function renderGeralCore(ids, isGeral){
   if(!isGeral) steps.push(['Page Views', intf(t.pv), [['CR',pct(dv.cr)],['CPV',brl(dv.cpv)]]]);
   steps.push(
     ['Leads', intf(t.leads), isGeral?[['CPL',brl(dv.cpl)]]:[['CPL',brl(dv.cpl)],['ConvLP',pct(dv.convlp)]]],
-    ['MQLs (Pontuação > 33)', intf(t.mqls), [['Tx‑MQL',pct(dv.tx)],['CPMQL',brl(dv.cpmql)]], false, 'hl-mql'],
+    ['MQLs (Prioridade Alta)', intf(t.mqls), [['Tx‑MQL',pct(dv.tx)],['CPMQL',brl(dv.cpmql)]], false, 'hl-mql'],
     ['Agendamentos', s.agendamentos!=null?intf(s.agendamentos):NA, [['Tx‑Agend',s.txag!=null?pct(s.txag):NA],['Custo/Agend',s.cpag!=null?brl(s.cpag):NA]], s.agendamentos==null],
   );
   if(!isGeral) steps.push(
@@ -1098,7 +1098,7 @@ function renderFunilLeads(funil, ids){
   if(!isWa) steps.push(['Page Views', intf(t.pv), [['CR',pct(dv.cr)],['CPV',brl(dv.cpv)]]]);
   steps.push([leadsLabel, intf(t.leads), isWa?[['CPL',brl(dv.cpl)]]:[['CPL',brl(dv.cpl)],['ConvLP',pct(dv.convlp)]]]);
   if(!isWa){
-    steps.push(['MQLs (Pontuação > 33)', intf(t.mqls), [['Tx‑MQL',pct(dv.tx)],['CPMQL',brl(dv.cpmql)]], false, 'hl-mql']);
+    steps.push(['MQLs (Prioridade Alta)', intf(t.mqls), [['Tx‑MQL',pct(dv.tx)],['CPMQL',brl(dv.cpmql)]], false, 'hl-mql']);
     steps.push(
       ['Vendas', s.vendas!=null?intf(s.vendas):NA, [['ConvMQL',s.convmql!=null?pct(s.convmql):NA],['CAC',s.cac!=null?brl(s.cac):NA]], s.vendas==null],
       ['Receita', s.receita!=null?brl(s.receita):NA, [['ROAS',s.roasReceita!=null?numf(s.roasReceita):NA],['Ticket',s.tmReceita!=null?brl(s.tmReceita):NA]], s.receita==null, 'hl-fat'],
