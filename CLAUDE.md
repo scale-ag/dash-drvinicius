@@ -77,29 +77,32 @@ abas) — `build.py` lê cada uma por **nome da aba**, via endpoint `gviz`
 |-----|-----|-----|----------------|
 | **Meta Ads** | `1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ` | `Página 1` | `Day` · `Campaign Name` · `Ad Set Name` · `Ad Name` · `Impressions` · `Link Clicks` · `Landing Page Views` · `Amount Spent` · `Messaging Conversations Started` (leads de WhatsApp/ENGJ — ver abaixo) (sem coluna de Checkout/Add to Cart nem Leads — ficam "-") |
 | **Meta Ads — Página 2** | (mesma planilha acima) | `Página 2` | `Day` · `Campaign Name` · `Ad Set Name` · `Ad Name` · `Impressions` · `Landing Page Views` · `Amount Spent` · `Link Clicks` · `Reach` — outro funil/conta (`DR. VINICIUS \| E1-DIST \| ... \| Alcance / Engajamento`; cliente confirmou não ser o mesmo funil E2-CAP). Vira `DATA.meta_other[]`, com sua PRÓPRIA aba na dashboard ("Funil Visitas ao Perfil", quebra por campanha/conjunto/anúncio inclusa) — nunca misturada com as abas Quiz/WhatsApp (funil E2-CAP, Página 1). Gasto/Impressões/Cliques/Landing Page Views também entram no total geral da Visão Geral/Relatório (`totals()`/`daily()`). Sem "Messaging Conversations Started"/Pontuação — não gera leads/MQL. |
-| **Leads** (fonte única de leads) | `1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I` | `Sessões` | 1 linha por **sessão** do quiz/formulário de qualificação: `Início`/`Última atividade` · `Status` (`Em andamento`/`Enviou`/`Desqualificado`) · `Pontuação` (escore MQL) · `Origem` (nome do anúncio) · `Campanha` (raramente preenchida). Só linhas com `Status == "Enviou"` viram lead. |
+| **Leads** (fonte única de leads) | `1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I` | `Leads` | 1 linha por **lead enviado** (formulário concluído), gravada pelo Apps Script do quiz: `Data/Hora` · `Nome` · `Telefone` · `Prioridade` · `Pontuação` (escore MQL) · `Procedimento` · `Atendimento` · `Quando` · `Decisão` · `Já consultou` · `Investimento` · `Local` · `Origem` (nome do anúncio). **Nome e Telefone NÃO são exportados** — ver nota de privacidade abaixo. A aba `Sessões` (1 linha por visitante) ainda é lida, mas **só para a linha de conferência no log do build** (`SHEET_SESSOES`), nunca para alimentar `leads[]`. |
 | **Agendamentos** | `1cOD2Sa9fp8TPJrBia7RY3br_Htg5pCJc5squzmLY4Dk` | `Planilha agendamento` | agregado **diário**: `Data` (DD/MM, sem ano) · `Agendamentos Confirmados` · `Cirurgias Confirmadas` · `Valor Total Cirurgias` |
 | **Seguidores/Visitas ao Perfil** | `1P8ge3MO5jOZ415ObL_-noCy0G8-U8v7C-TV14aT6RGs` | **1 aba por mês**, nome em pt-BR (ex. `Setembro`) — `build.py` sempre lê a aba do **mês corrente do build** (`MESES_PT`/`main()`); meses passados em abas antigas não aparecem (limitação conhecida) | agregado **diário** preenchido à mão pelo cliente (Adveronix cobra à parte por essas 2 métricas): `Data` (DD/MM/AAAA — parser dedicado `parse_date_br()`, nunca `parse_date()`, que tentaria mm/dd primeiro e erraria os dias 1-12) · `Invest. (R$)` · `Seguid.` (seguidores ganhos no dia) · `Visitas ao perfil`. Cabeçalho tem células mescladas com texto longo — `header_index()` usada só com fallback posicional (colunas 1/3/4/6), nunca por alias. Vira `DATA.seguidores[]`, só no funil "Visitas ao Perfil" (`app.js::segTotals()`/`renderFunilPerfil`) — agregado da conta inteira, sem atribuição por anúncio, então só entra no card do funil e na tabela diária dessa aba, nunca nas 3 tabelas Campanha→Conjunto→Anúncio nem na Visão Geral/Relatório. Custo por Seguidor/Custo Por Visita usam o **Investimento desta própria planilha** (não o Gasto da Página 2), pra bater com o que o cliente já vê lá. |
 
-> ⚠️ **CORRIGIDO (14/09/2026):** a aba **"Leads"** (mesma planilha de Sessões)
-> NÃO é "um registro por agendamento" como esta nota afirmava antes. Conferido
-> contra o fonte do quiz (`quiz/index.html`, função `submitLead()`): ela é
-> gravada pelo próprio Apps Script a cada formulário enviado, **1 linha por
-> lead do quiz**, e suas colunas são exatamente o payload do quiz —
-> `Data/Hora · Nome · Telefone · Prioridade · Pontuação · Procedimento ·
-> Atendimento · Quando · Decisão · Já consultou · Investimento · Local ·
-> Origem`. É o mesmo conjunto de leads que hoje vem da aba Sessões
-> (`Status == "Enviou"`), só que **mais rico**: traz o Procedimento por lead
-> (que Sessões não tem) e a Prioridade Alta/Média já calculada.
-> Ainda **não é lida** pelo `build.py` — a troca da fonte de leads
-> (Sessões → Leads) está pendente de decisão, ver "Lacunas de dados".
+> 🔒 **PRIVACIDADE — nunca exportar Nome/Telefone.** A aba `Leads` tem as duas
+> colunas, e o `build.py` deliberadamente **não** as coloca em `leads[]`
+> (`nm`/`ph` ficam `"—"`). O dashboard é publicado em **GitHub Pages público**;
+> nome + telefone de quem procurou um cirurgião plástico é exatamente o dado
+> sensível que não pode sair daqui. Cada lead exportado é só
+> `{data, campanha, conjunto, anúncio, procedimento, MQL sim/não}` — sem
+> nada que identifique a pessoa. Se algum dia precisar cruzar por telefone,
+> isso tem que acontecer FORA do HTML público.
+>
+> ℹ️ **Histórico:** até 14/09/2026 a fonte de leads era a aba `Sessões`, porque
+> este arquivo afirmava (erradamente) que a aba `Leads` era "um registro por
+> agendamento preenchido pelo comercial". Conferido contra o fonte do quiz
+> (`quiz/index.html`, `submitLead()`), as colunas da aba `Leads` são exatamente
+> o payload do formulário. A troca foi feita e o build passou a imprimir a
+> conferência entre as duas abas no log (ver abaixo).
 
 ### Regra de Lead Qualificado (MQL) e fontes de Leads
 Duas fontes de Leads, mantidas **separadas por `src`** (o gráfico "Leads por
 origem" já distingue):
-1. **Quiz/LP** (`src="meta"`) — aba **Sessões**, só `Status == "Enviou"`
-   (completou o formulário) **E** com Origem/Campanha reconhecida (atribuível
-   a um anúncio do Meta — ver seção seguinte). MQL = coluna **"Pontuação" >= 33**
+1. **Quiz/LP** (`src="meta"`) — aba **Leads** (toda linha já é formulário
+   concluído, não precisa filtrar Status) **E** com Origem/Campanha reconhecida
+   (atribuível a um anúncio do Meta — ver seção seguinte). MQL = coluna **"Pontuação" >= 33**
    (`build.py` → `is_qualified` + constante `CORTE_ALTA`). Esse corte é o
    MESMO que o quiz aplica pra carimbar **"Prioridade: Alta"**
    (`CFG.CORTE_ALTA = 33` em `quiz/index.html`) — tem que ser `>=` e não `>`,
@@ -128,23 +131,23 @@ origem" já distingue):
    > "Messaging Conversations Started" na extração automática (app Adveronix,
    > mesmo processo que já preenche `Página 1`) — sem trabalho manual diário.
 
-Como nenhuma das duas fontes LIDAS HOJE traz o procedimento de interesse
-(a aba Sessões não tem essa coluna), os campos `prof`/`bucket` ficam fixos em
-`"Sem resposta"`; a aba **"Leads"** TEM a coluna Procedimento e resolveria
-isso — ver "Lacunas de dados"; os
-gráficos "Leads por procedimento" e "Procedimentos mais buscados" (`app.js`)
-mostram isso até existir uma fonte com o procedimento por lead.
+O **Procedimento** por lead vem da coluna homônima da aba `Leads` e alimenta
+`prof`/`bucket` — os gráficos "Leads por procedimento" e "Procedimentos mais
+buscados" (`app.js`) mostram dado real desde 14/09/2026. Os leads sintéticos de
+WhatsApp/Engajamento continuam em `"Sem resposta"`: uma conversa iniciada não
+tem procedimento declarado.
 
-### Atribuição do anúncio (Sessões → Campanha/Conjunto/Anúncio)
-A aba Sessões não traz Campanha/Conjunto prontos por linha (`ad_id`/
+### Atribuição do anúncio (Leads → Campanha/Conjunto/Anúncio)
+A aba Leads não traz Campanha/Conjunto prontos por linha (`ad_id`/
 `adset_id`/`campaign_id` vêm sempre vazios nos dados reais) — a coluna
 **"Origem"** carrega o **nome do anúncio**, idêntico ao `Ad Name` do Meta Ads
 (confirmado: ~87% de match nos dados reais). `build_ad_struct()` (`build.py`)
 cruza por esse nome e escolhe a combinação (Campanha, Conjunto) de **maior
 gasto** no Meta para aquele anúncio (um anúncio pode rodar em mais de um
 conjunto). Quando "Origem" está vazia, cai no fallback da coluna "Campanha"
-(quando preenchida); sem nenhuma das duas, a sessão é **descartada** (não
-entra em `leads[]` — ver nota acima). Os leads sintéticos de WhatsApp/
+(quando preenchida); sem nenhuma das duas, o lead é **descartado** (não
+entra em `leads[]` — ver nota acima). É isso que também descarta as linhas de
+teste preenchidas à mão, que vêm sem Origem. Os leads sintéticos de WhatsApp/
 Engajamento já vêm com Campanha/Conjunto/Anúncio exatos da
 própria linha do Meta Ads — não precisam desse cruzamento.
 
@@ -182,10 +185,11 @@ não filtra por esse prefixo — mantém TODAS as campanhas no dashboard.
 ## Arquitetura / arquivos
 
 ```
-quiz/index.html           # FONTE do quiz de pré-atendimento (cópia fiel do que está no ar em
-                          # drviniciusdemello.netlify.app, arquivada aqui em 14/09/2026 para a
-                          # agência ter o controle). NÃO é publicada por este repo ainda.
-quiz/README.md            # o que é, o que está pendente (pixel/Lead, migração p/ Pages da agência)
+quiz/index.html           # FONTE do quiz de pré-atendimento (arquivada em 14/09/2026 a partir do que
+                          # está no ar em drviniciusdemello.netlify.app, + eventID no Lead, modo
+                          # ?fbdebug=1 e minimização de dado de saúde no pixel). Publicada em
+                          # <pages>/quiz/ pelo deploy.yml.
+quiz/README.md            # mapeamento quiz -> abas -> build.py, e o diagnóstico do bloqueio do Meta
 build/build.py            # lê os CSVs (read-only) de 4 planilhas separadas, emite REGISTROS BRUTOS (leads[]/meta[]/agenda[]/meta_other[]/seguidores[]/ad_links); render() COSTURA os 4 arquivos abaixo
 build/template.html       # esqueleto HTML. Placeholders __STYLES__, __APP_JS__, __DATA_JSON__, __BUILD_ID__, __GENERATED_BRT__
 build/identidade-visual.css  # TODAS as cores (tema claro=padrão / escuro). Mexa AQUI p/ trocar só cor
@@ -335,13 +339,11 @@ filtro cruzado bidirecional; tabela diária com último dia no topo; heatmap de 
 fixa por métrica.
 
 ## Lacunas de dados
-- **Procedimento por lead** → a aba lida hoje (Sessões) não tem a coluna, então
-  "Leads por procedimento" e "Procedimentos mais buscados" mostram "Sem
-  resposta". **Já existe fonte:** a aba **"Leads"** da mesma planilha traz
-  `Procedimento` por lead. Trocar a fonte de leads de `Sessões` para `Leads`
-  resolve — pendente de decisão porque o total de Leads foi calibrado na aba
-  Sessões pra bater com o Ads Manager, e a troca precisa ser validada contra
-  o gerenciador antes de virar padrão.
+- **Evento `Lead` do Meta bloqueado** → o Meta bloqueou os dados dos 3 domínios
+  do cliente por política de dado de saúde (ver `quiz/README.md`). Isso derruba
+  a otimização da campanha, **não** a dashboard: `build.py` lê os leads da
+  planilha, nunca do Meta, e a atribuição vem da URL do anúncio
+  (`Origem`/`utm_content`), não do pixel.
 - **Reuniões Realizadas / No‑Show** → a planilha de Agendamentos não distingue
   agendado × comparecido; aparece "-" até vir essa distinção.
 - **Agendamentos/Vendas/Faturamento por campanha/anúncio** → a planilha de

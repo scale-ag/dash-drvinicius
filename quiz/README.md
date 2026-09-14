@@ -2,7 +2,7 @@
 
 Fonte do formulário de qualificação que alimenta a dashboard deste repo.
 
-`index.html` é **cópia fiel** do que estava no ar em
+`index.html` partiu de uma **cópia fiel** do que estava no ar em
 `https://drviniciusdemello.netlify.app` em 14/09/2026 (obtida via view-source;
 só foram removidos os `<meta>` que a Netlify injeta no HTML servido). Foi
 arquivada aqui para a agência ter o código sob controle — hoje o deploy ainda
@@ -34,6 +34,33 @@ Pontuação: mínimo real 16, máximo 48 (a pergunta de procedimento tem
 `score:false`, não pontua). Quem marca "Outro plano de saúde" cai em
 `disqualify()` (`p:-99`) antes da tela de contato — não deixa telefone e
 **não dispara o evento de conversão**, de propósito.
+
+Sobre a cópia: além da cópia fiel (preservada no commit `c9a5761`), o arquivo
+hoje traz `eventID` no Lead, o modo `?fbdebug=1` e a **minimização de dado de
+saúde** descrita abaixo.
+
+## Minimização de dado de saúde enviado ao pixel (14/09/2026)
+
+Aplicada em resposta ao bloqueio do Meta. Saíram do pixel **todos** os eventos
+personalizados que associavam a pessoa a um funil médico:
+
+| Evento removido | Por que | Onde continua medido |
+|---|---|---|
+| `trackCustom('QuizStep', {step_key})` | `step_key` carrega nomes clínicos (`procedimento`, `plano`) | beacon → aba **Funil** da planilha |
+| `trackCustom('PreAtendimentoStart')` | nomeia o funil como pré-atendimento médico | aba **Funil** (etapa 0) |
+| `trackCustom('PreAtendimentoComplete')` | idem, no fim do funil | aba **Leads** (a linha existir já é a conclusão) |
+| `trackCustom('QuizDisqualify')` | "desqualificado" aqui significa plano de saúde — dado de saúde puro | beacon → aba **Funil** |
+| `trackCustom('WhatsAppClick')` | sinal do mesmo funil, sem valor próprio | — |
+
+Sobra no pixel só o essencial: `init`, `PageView` e o `Lead` de conversão.
+Verificado em Chromium headless com o fluxo completo: **16 → 4 chamadas ao
+pixel**, e as **11 chamadas ao Apps Script intactas** — nenhuma medição nossa
+foi perdida, porque o funil por etapa sempre foi da planilha, não do Meta.
+
+Lever ainda disponível, se a revisão do Meta pedir mais: o advanced matching
+(`fbq('init', PIXEL_ID, {ph, fn})` em `submitLead`) manda telefone e primeiro
+nome. Não é dado clínico, e tirá-lo custa qualidade de correspondência — por
+isso ficou. É a próxima coisa a cair se necessário.
 
 ## Pendências conhecidas
 

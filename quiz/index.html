@@ -126,7 +126,6 @@ const ans = {};
 let i = 0;
 const stage = document.getElementById("stage");
 const bar = document.getElementById("bar");
-let started = false;
 
 const params = new URLSearchParams(location.search);
 /* ?fbdebug=1 na URL loga no console cada chamada ao pixel (para conferir o
@@ -196,7 +195,10 @@ function beacon(payload){
 function trackStep(idx){
   var s=steps[idx]||{};
   var key=s.key||s.type||("step"+idx);
-  fbq_safe("trackCustom","QuizStep",{step_num:idx, step_key:key});
+  /* A etapa NAO vai mais para o pixel: `step_key` carrega nomes clínicos
+     ("procedimento", "plano") e associava a pessoa a um funil médico. O funil
+     por etapa continua medido pelo beacon abaixo -> aba "Funil" da planilha,
+     que é dado nosso e não passa pelo Meta. */
   beacon({type:"step", sid:SID, step_num:idx, step_key:key,
     ad_id:attrib.ad_id, adset_id:attrib.adset_id, campaign_id:attrib.campaign_id, origem:origem, campanha:campanha});
 }
@@ -217,7 +219,7 @@ function render(){
         '<span>Pré-atendimento seguro</span>'+
         '<span>Atendimento humanizado</span>'+
       '</div>';
-    button("Iniciar meu pré-atendimento", ()=>{ if(!started){started=true; fbq_safe('trackCustom','PreAtendimentoStart');} i++; render(); });
+    button("Iniciar meu pré-atendimento", ()=>{ i++; render(); });
     return;
   }
 
@@ -289,7 +291,8 @@ function submitLead(){
 
 function disqualify(){
   bar.style.width="100%";
-  fbq_safe("trackCustom","QuizDisqualify");
+  /* Sem evento de pixel aqui: "desqualificado" neste quiz significa plano de
+     saúde, dado de saúde puro. Segue registrado só na planilha. */
   beacon({type:"dq", sid:SID, step_num:i, step_key:"plano_outro",
     ad_id:attrib.ad_id, adset_id:attrib.adset_id, campaign_id:attrib.campaign_id, origem:origem, campanha:campanha});
   stage.innerHTML=
@@ -302,12 +305,11 @@ function disqualify(){
 
 function restart(){
   for(const k in ans){ delete ans[k]; }
-  i=0; started=false; render();
+  i=0; render();
 }
 
 function finish(){
   bar.style.width="100%";
-  fbq_safe('trackCustom','PreAtendimentoComplete');
 
   const total=score();
   const linhas=[
@@ -334,7 +336,6 @@ function finish(){
   const a=document.createElement("a");
   a.className="cta wpp"; a.href="https://wa.me/"+CFG.WPP+"?text="+msg;
   a.rel="noopener"; a.innerHTML='<span style="font-size:20px">💬</span> Falar no WhatsApp';
-  a.onclick=()=>fbq_safe('trackCustom','WhatsAppClick');
   stage.appendChild(a);
 
   /* Resumo e Prioridade NÃO são mostrados à paciente — vão só pra secretária (msg do WhatsApp + planilha). */

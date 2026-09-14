@@ -99,7 +99,17 @@ SHEET_META = "Página 1"
 # por campanha (ver nota no topo do arquivo).
 SHEET_META_OTHER = "Página 2"
 SPREADSHEET_ID_LEADS = "1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I"
-SHEET_LEADS = "Sessões"
+# Aba "Leads" da planilha do quiz: 1 linha POR LEAD ENVIADO, gravada pelo Apps
+# Script a cada formulário concluído. Colunas = payload do quiz (ver
+# quiz/index.html::submitLead): Data/Hora · Nome · Telefone · Prioridade ·
+# Pontuação · Procedimento · Atendimento · Quando · Decisão · Já consultou ·
+# Investimento · Local · Origem. É o mesmo conjunto de leads da aba "Sessões"
+# (Status == "Enviou"), mas traz o Procedimento por lead, que Sessões não tem.
+SHEET_LEADS = "Leads"
+# Aba "Sessões" (1 linha por visitante, com Status/etapa máxima) — lida só para
+# CONFERÊNCIA: o build imprime a contagem das duas abas lado a lado no log, pra
+# validar contra o Ads Manager. Não alimenta leads[].
+SHEET_SESSOES = "Sessões"
 # Campanhas de Engajamento/WhatsApp (clique abre conversa direto, sem quiz) —
 # identificadas pela substring abaixo no Campaign Name do Meta Ads.
 # Corte de MQL: o quiz carimba "Prioridade: Alta" com Pontuação >= 33
@@ -319,7 +329,7 @@ def classify_funnel(campaign: str) -> str:
 # --------------------------------------------------------------------------- #
 # Processamento -> registros brutos
 # --------------------------------------------------------------------------- #
-def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows):
+def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows, sessoes_rows=None):
     mheader = meta_rows[0] if meta_rows else []
     midx = header_index(
         mheader,
@@ -405,18 +415,24 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows
 
     # Leads = 2 fontes distintas, mantidas separáveis por "src" (o gráfico
     # "Leads por origem" do app.js já separa por esse campo):
-    #   1) aba "Sessões" (quiz/LP) — só Status == "Enviou" (completou o
-    #      formulário); é aí que mora a Pontuação (MQL).
+    #   1) aba "Leads" (quiz/LP) — 1 linha por formulário enviado, já é só
+    #      lead fechado (não precisa filtrar Status). É aí que mora a
+    #      Pontuação (MQL) e o Procedimento.
     #   2) campanhas de Engajamento/WhatsApp (Campaign Name contém "ENGJ") —
     #      não passam pelo quiz; cada "Messaging Conversations Started" vira
     #      1 lead sintético (sem pontuação — não dá pra qualificar 1 a 1).
+    #
+    # Nome e Telefone existem nesta aba e NÃO são exportados: o dashboard é
+    # publicado em GitHub Pages PÚBLICO, e nome+telefone de quem procurou um
+    # cirurgião plástico é exatamente o dado sensível que não pode sair daqui.
+    # Só entram data, anúncio, procedimento e o booleano de MQL.
     lheader = leads_rows[0] if leads_rows else []
     lidx = header_index(
         lheader,
-        {"start": ["início", "inicio"], "last": ["última atividade", "ultima atividade"],
-         "status": ["status"], "score": ["pontuação", "pontuacao"],
-         "campanha": ["campanha"], "origem": ["origem"], "ad_id": ["ad_id"]},
-        {"start": 1, "last": 2, "status": 5, "score": 7, "origem": 11, "campanha": 12, "ad_id": 8},
+        {"data": ["data/hora", "data hora", "data"], "score": ["pontuação", "pontuacao"],
+         "proc": ["procedimento"], "campanha": ["campanha"], "origem": ["origem"],
+         "ad_id": ["ad_id"]},
+        {"data": 0, "score": 4, "proc": 5, "origem": 12, "campanha": 13, "ad_id": 14},
     )
 
     def is_test_session(origem, campanha, ad_id):
@@ -426,8 +442,6 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows
     leads = []
     for row in leads_rows[1:]:
         if not any((c or "").strip() for c in row):
-            continue
-        if cell(row, lidx["status"]) != "Enviou":
             continue
         origem = cell(row, lidx["origem"])
         campanha_col = cell(row, lidx["campanha"])
@@ -440,21 +454,23 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows
         elif valid_utm(campanha_col):
             camp, adset, ad, src = campanha_col, "(sem conjunto)", (origem or "(sem anúncio)"), "meta"
         else:
-            # Sessão sem Origem/Campanha reconhecida (orgânico/direto, sem
+            # Lead sem Origem/Campanha reconhecida (orgânico/direto, sem
             # clique de anúncio pra atribuir) — cliente pediu que o total de
             # Leads bata com o Ads Manager (que só enxerga o que veio de
-            # clique), então essas sessões NÃO entram em leads[] (nem no
-            # total, nem no funil, nem nas MQLs).
+            # clique), então esses leads NÃO entram em leads[] (nem no
+            # total, nem no funil, nem nas MQLs). É o que descarta também as
+            # linhas de teste preenchidas à mão, que vêm sem Origem.
             continue
+        proc = cell(row, lidx["proc"]) or "Sem resposta"
         leads.append({
-            "d": parse_date(cell(row, lidx["last"]) or cell(row, lidx["start"])),
+            "d": parse_date(cell(row, lidx["data"])),
             "src": src,
             "plat": "ig" if src == "meta" else "—",
             "camp": camp,
             "adset": adset,
             "ad": ad,
-            "prof": "Sem resposta",
-            "bucket": "Sem resposta",
+            "prof": proc,
+            "bucket": proc,
             "q": 1 if is_qualified(cell(row, lidx["score"])) else 0,
             "utm": 1 if src == "meta" else 0,
             "nm": "—",
@@ -548,6 +564,34 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows
             continue
         seguidores.append({"d": d, "inv": round(inv, 4), "seg": seg, "vis": vis})
 
+    # Conferência Sessões x Leads: mesma regra de atribuição aplicada à aba
+    # antiga, só para o log do build. A troca da fonte (Sessões -> Leads) não
+    # deveria mexer no total — as duas abas são gravadas pelo mesmo envio —,
+    # então uma divergência aqui é sinal de que algo precisa ser olhado antes
+    # de confiar no número contra o Ads Manager.
+    cmp_sessoes = None
+    if sessoes_rows:
+        sh = sessoes_rows[0]
+        sidx = header_index(
+            sh,
+            {"status": ["status"], "campanha": ["campanha"], "origem": ["origem"],
+             "ad_id": ["ad_id"]},
+            {"status": 5, "origem": 11, "campanha": 12, "ad_id": 8},
+        )
+        n = 0
+        for row in sessoes_rows[1:]:
+            if not any((c or "").strip() for c in row):
+                continue
+            if cell(row, sidx["status"]) != "Enviou":
+                continue
+            o = cell(row, sidx["origem"])
+            c_ = cell(row, sidx["campanha"])
+            if is_test_session(o, c_, cell(row, sidx["ad_id"])):
+                continue
+            if (ad_struct.get(o) if o else None) or valid_utm(c_):
+                n += 1
+        cmp_sessoes = n
+
     dates = sorted({d for d in (
         [l["d"] for l in leads if l["d"]] + [m["d"] for m in meta if m["d"]] + [a["d"] for a in agenda if a["d"]]
         + [m["d"] for m in meta_other if m["d"]] + [s["d"] for s in seguidores if s["d"]]
@@ -561,6 +605,7 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows
             "date_max": dates[-1] if dates else None,
             "tax_factor": TAX_FACTOR,
             "sample_min_spend": SAMPLE_MIN_SPEND,
+            "cmp_sessoes": cmp_sessoes,
             "sample_min_mqls": SAMPLE_MIN_MQLS,
             "top_ads_n": TOP_ADS_N,
             "meta_cpmql": META_CPMQL,
@@ -634,18 +679,26 @@ def main():
     ap.add_argument("--agenda-file", help="CSV local da aba Planilha agendamento")
     ap.add_argument("--meta-other-file", help="CSV local da aba Página 2 (gasto/impressões sem atribuição de campanha)")
     ap.add_argument("--seguidores-file", help="CSV local da aba de Seguidores/Visitas ao Perfil (mês corrente, preenchida à mão)")
+    ap.add_argument("--sessoes-file", help="CSV local da aba Sessões (só para a conferência no log)")
     ap.add_argument("--template", default="build/template.html")
     ap.add_argument("--out", default="dist/index.html")
     args = ap.parse_args()
 
     meta_rows = load_rows(sheet_url(SPREADSHEET_ID_META, SHEET_META), args.meta_file)
     leads_rows = load_rows(sheet_url(SPREADSHEET_ID_LEADS, SHEET_LEADS), args.leads_file)
+    # Aba antiga, só para a linha de conferência no log (ver process()).
+    # Nunca derruba o build: se a aba sumir ou falhar, segue sem a comparação.
+    try:
+        sessoes_rows = load_rows(sheet_url(SPREADSHEET_ID_LEADS, SHEET_SESSOES), args.sessoes_file)
+    except Exception as e:
+        print(f"  aviso     : não deu pra ler a aba '{SHEET_SESSOES}' p/ conferência ({e})", file=sys.stderr)
+        sessoes_rows = None
     agenda_rows = load_rows(sheet_url(SPREADSHEET_ID_AGENDA, SHEET_AGENDA), args.agenda_file)
     meta_other_rows = load_rows(sheet_url(SPREADSHEET_ID_META, SHEET_META_OTHER), args.meta_other_file)
     sheet_seguidores = MESES_PT[datetime.now(BRT).month - 1]
     seguidores_rows = load_rows(sheet_url(SPREADSHEET_ID_SEGUIDORES, sheet_seguidores), args.seguidores_file)
 
-    data = process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows)
+    data = process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows, sessoes_rows)
 
     # Insights de Tráfego (texto pré-escrito) — lidos do arquivo versionado ao
     # lado do template. Sem chamada de API no build.
@@ -665,6 +718,10 @@ def main():
     print("== build ok ==", file=sys.stderr)
     print(f"  periodo   : {b['date_min']} -> {b['date_max']}", file=sys.stderr)
     print(f"  leads     : {len(data['leads'])} (quiz/LP: {n_quiz}  whatsapp: {n_wa})  MQLs (Pontuação >= {CORTE_ALTA}): {q}", file=sys.stderr)
+    cs = b.get("cmp_sessoes")
+    if cs is not None:
+        bate = "OK, batem" if cs == n_quiz else f"DIVERGEM em {abs(cs - n_quiz)}"
+        print(f"  conferência: aba '{SHEET_LEADS}' {n_quiz} x aba '{SHEET_SESSOES}' {cs} leads atribuídos — {bate}", file=sys.stderr)
     print(f"  agenda    : {len(data['agenda'])} dias com dado  vendas: {vd}  faturamento: R$ {fat:,.2f}", file=sys.stderr)
     n_fq = sum(1 for m in data["meta"] if m["funnel"] == "quiz")
     n_fw = sum(1 for m in data["meta"] if m["funnel"] == "whatsapp")
