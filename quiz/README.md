@@ -70,17 +70,58 @@ categoria sensível com regra mais dura e suprime eventos até o negócio
 completar a verificação — normalmente **verificação de domínio** em
 Configurações do Negócio → Segurança da Marca → Domínios.
 
-### ⚠️ Impacto no plano de migração: domínio próprio é requisito
+### Causa raiz confirmada: bloqueio por dado de saúde (não é verificação de domínio)
 
-`drviniciusdemello.netlify.app` **não é um domínio verificável** no Meta —
-`netlify.app` é domínio compartilhado (Public Suffix List), ninguém verifica um
-subdomínio dele. **`github.io` tem exatamente o mesmo problema**, então publicar
-o quiz em `scale-ag.github.io/dash-drvinicius/quiz/` dá controle à agência mas
-**não resolve a supressão**.
+Events Manager → aba "Ações" (14/09/2026):
 
-Para o evento voltar a marcar, o quiz precisa rodar num **domínio próprio**
-(ex.: `quiz.<dominio-do-doutor>.com.br`) que possa ser verificado no Business
-Manager. O Pages deste repo aceita domínio customizado — é configurar o CNAME.
+> **Alguns dados do site foram bloqueados**
+> "Alguns dados do site são bloqueados porque parecem inconsistentes com nossos
+> Termos das Ferramentas da Meta para Empresas, pois podem: estar associados a
+> **condições médicas, estados de saúde específicos ou relacionamentos entre
+> prestador de serviços e paciente**."
+>
+> Sites bloqueados:
+> - `drviniciusdemello.netlify.app`
+> - `drviniciusmello.com`
+> - `lp.drviniciusmello.com`
+
+**Os TRÊS domínios estão bloqueados — inclusive o domínio próprio do cliente.**
+Isso descarta a hipótese anterior (registrada aqui por engano) de que faltava
+verificação de domínio e de que um domínio próprio resolveria. Não resolve:
+`drviniciusmello.com` já é dele e está na lista.
+
+Não é problema técnico nem de configuração. É **enforcement de política do Meta
+sobre dado de saúde**, aplicado ao conjunto de dados inteiro.
+
+Consequências práticas:
+
+- Trocar de hospedagem (Netlify → Pages) **não levanta o bloqueio**. Publicar o
+  quiz em `<pages>/quiz/` continua valendo pelo controle do código, mas não
+  restaura o evento.
+- **Conversions API não é contorno.** A política vale para o conjunto de dados,
+  não só para o pixel do navegador — e usar CAPI para driblar um bloqueio ativo
+  é violação de termos, com risco para a conta de anúncios inteira.
+- **Domínio novo para "resetar" o flag também não é caminho**: o classificador
+  avalia o conteúdo, então reclassifica; e fazê-lo com intenção de evadir é
+  violação, arriscando a conta.
+
+Caminhos legítimos, em ordem:
+
+1. **"Analisar solução"** no próprio card — é o fluxo de revisão/contestação do
+   Meta. Primeiro passo, gratuito.
+2. **Minimização real do dado enviado** (conformidade de verdade, não disfarce):
+   não mandar ao pixel nada que revele o interesse clínico da pessoa. Hoje o
+   quiz não envia as respostas, mas envia `trackCustom('QuizStep', {step_key})`
+   com chaves como `procedimento`/`plano`, além de `PreAtendimentoStart` e
+   `PreAtendimentoComplete` — sinais que associam a pessoa a um funil médico.
+3. **Trocar o mecanismo de conversão** para um que não dependa do pixel do site:
+   campanha de Mensagem/WhatsApp (a `ENGJ`, que já roda e já é a maior fonte de
+   lead deste cliente) ou Formulário Instantâneo dentro do Facebook/Instagram.
+
+**A dashboard não é afetada.** `build.py` lê os leads direto da planilha
+(Sessões/Leads), nunca do Meta — o bloqueio derruba a otimização da campanha,
+não o relatório. Leads, MQLs e atribuição por anúncio (via `Origem`/utm_content)
+continuam funcionando normalmente.
 
 ### 2. Migração para a agência
 
@@ -92,6 +133,8 @@ Ordem obrigatória quando for migrar (regra do próprio padrão de quiz):
 
 O cabeçalho das abas `Leads` e `Sessões` **tem que permanecer idêntico** — é o
 que o `build/build.py` lê. Mudou coluna, a dashboard para de contar lead.
+
+Migrar resolve controle do código, **não** o bloqueio do Meta — ver acima.
 
 > `CFG.LEAD_ENDPOINT` é uma URL pública de App da Web (já visível no
 > view-source do site no ar). Não é credencial, mas o Apps Script novo deve
