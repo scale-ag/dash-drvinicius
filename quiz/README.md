@@ -37,44 +37,50 @@ Pontuação: mínimo real 16, máximo 48 (a pergunta de procedimento tem
 
 ## Pendências conhecidas
 
-### 1. Evento `Lead` no Meta Ads não está marcando
+### 1. Evento `Lead` não marca — CAUSA ENCONTRADA (14/09/2026)
 
-**Estado em 14/09/2026: ainda aberto.** O que já foi descartado, com prova:
+**O Meta está suprimindo o evento de propósito.** Console do navegador no site
+no ar, vindo do próprio `fbevents.js`:
 
-| Hipótese | Veredito | Como foi testada |
+```
+[Meta Pixel] — You are attempting to send an unverified event.
+The event was suppressed. Go to Events Manager to learn more.   fbevents.js:202
+```
+
+Não é falha de disparo. O quiz chama `fbq('track','Lead')` corretamente e a
+biblioteca do Meta recebe a chamada — ela é que decide não enviar.
+
+Provas de que o código está certo (todas as outras hipóteses caíram):
+
+| Hipótese | Veredito | Prova |
 |---|---|---|
-| "Não republicaram o HTML depois de trocar Schedule→Lead (10/08)" | ❌ descartada | O view-source do site no ar já tem `CONV_EVENT: "Lead"` |
-| "O formulário/Apps Script quebrou" | ❌ descartada | Teste real em 14/09 05:02 gravou a linha na aba Leads normalmente |
-| "`fbq.apply(null, arguments)` em `fbq_safe()` mata a chamada" | ❌ descartada | Fluxo completo rodado em Chromium headless com `fbq` instrumentado: as 16 chamadas (init, PageView, 10× QuizStep, Lead com eventID, PreAtendimentoComplete) chegam ao pixel, nas duas versões. O script não roda em strict mode, então `this` vira o objeto global e a chamada é idêntica à direta. |
+| Não republicaram o HTML depois de trocar Schedule→Lead | ❌ | view-source do site no ar já tem `CONV_EVENT: "Lead"` |
+| Formulário/Apps Script quebrado | ❌ | teste real de 14/09 gravou a linha na aba Leads |
+| `fbq.apply(null, arguments)` mata a chamada | ❌ | fluxo completo em Chromium headless: as 16 chamadas chegam ao pixel nas duas versões (o script não roda em strict mode, `this` vira o objeto global) |
+| `fbevents.js` bloqueado / chamadas presas na fila | ❌ | `fbq.queue.length === 0` e o próprio `fbevents.js:202` emitindo o aviso — a biblioteca carregou e está rodando |
+| **Meta suprimindo evento não verificado** | ✅ **é esta** | aviso explícito no console + aba "Ações" do Events Manager com alerta pendente |
 
-Ou seja: **o quiz dispara `fbq('track','Lead')` corretamente.** O problema está
-entre o navegador e o Events Manager, não no código do formulário.
+**Onde resolver:** Events Manager → dataset `1601913367590883` → aba **"Ações"**
+(estava com marcador vermelho de pendência já no primeiro print). É lá que o
+Meta diz exatamente o que exige.
 
-O fato que ainda não tem explicação: nos Eventos de teste de 14/09 apareceu
-**só o `PageView`**, e nenhum dos `trackCustom` (`QuizStep` dispara em toda
-troca de tela) nem o `Lead`. Como o disparo está provado, sobra:
+Causa provável: o funil é de **cirurgia plástica** e o quiz coleta dado de
+saúde (procedimento de interesse, plano de atendimento). O Meta trata
+categoria sensível com regra mais dura e suprime eventos até o negócio
+completar a verificação — normalmente **verificação de domínio** em
+Configurações do Negócio → Segurança da Marca → Domínios.
 
-1. **`fbevents.js` não carregou** (bloqueador, extensão, DNS, ITP). Sem a
-   biblioteca, `fbq` continua sendo o stub e as chamadas ficam presas em
-   `fbq.queue` — nada sai do navegador. Não explica o PageView ter chegado,
-   a menos que ele tenha vindo de outra origem.
-2. **Filtro do painel.** O seletor ao lado de "Limpar atividade" estava em
-   "5 opções selecionadas" — pode estar escondendo eventos recebidos.
-3. **Defasagem do próprio painel** — o PageView é de 05:02:29 e o lead foi
-   gravado às 05:02:56; se a captura de tela saiu nesse intervalo, o Lead
-   ainda não teria aparecido.
-4. **Configuração de otimização/atribuição** — a campanha otimizando uma
-   conversão personalizada antiga em vez do evento padrão `Lead`.
+### ⚠️ Impacto no plano de migração: domínio próprio é requisito
 
-**Instrumento para fechar o diagnóstico:** abrir o quiz com `?fbdebug=1` e o
-console do navegador aberto. Cada chamada vira uma linha `[pixel] enviado: …`
-e, no momento do Lead, `fbDiag()` imprime **se o `fbevents.js` carregou** e
-quantas chamadas estão presas na fila. Isso separa (1) de (2)/(3)/(4) de vez.
+`drviniciusdemello.netlify.app` **não é um domínio verificável** no Meta —
+`netlify.app` é domínio compartilhado (Public Suffix List), ninguém verifica um
+subdomínio dele. **`github.io` tem exatamente o mesmo problema**, então publicar
+o quiz em `scale-ag.github.io/dash-drvinicius/quiz/` dá controle à agência mas
+**não resolve a supressão**.
 
-Melhoria já aplicada: o `Lead` agora vai com **`eventID`** (`<sid>-lead`), e o
-mesmo id é gravado no payload da planilha (`event_id`). Sem isso não dá para
-somar a Conversions API depois sem contar o mesmo lead duas vezes — e a CAPI é
-o caminho para recuperar o sinal que o navegador perde (ATT/iOS, bloqueadores).
+Para o evento voltar a marcar, o quiz precisa rodar num **domínio próprio**
+(ex.: `quiz.<dominio-do-doutor>.com.br`) que possa ser verificado no Business
+Manager. O Pages deste repo aceita domínio customizado — é configurar o CNAME.
 
 ### 2. Migração para a agência
 
