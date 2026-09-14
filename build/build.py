@@ -432,7 +432,14 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows
         {"data": ["data/hora", "data hora", "data"], "score": ["pontuação", "pontuacao"],
          "proc": ["procedimento"], "campanha": ["campanha"], "origem": ["origem"],
          "ad_id": ["ad_id"]},
-        {"data": 0, "score": 4, "proc": 5, "origem": 12, "campanha": 13, "ad_id": 14},
+        # Fallback posicional SÓ para as colunas confirmadas no cabeçalho real
+        # (A=Data/Hora, E=Pontuação, F=Procedimento, M=Origem). "campanha" e
+        # "ad_id" ficam sem fallback de propósito: só existem se um cabeçalho
+        # com esse nome existir de fato. Com um índice chutado, uma coluna
+        # qualquer à direita de "Origem" (sid, event_id, timestamp) passaria no
+        # valid_utm() — que aceita quase toda string não vazia — e viraria uma
+        # campanha inventada para leads sem anúncio reconhecido.
+        {"data": 0, "score": 4, "proc": 5, "origem": 12},
     )
 
     def is_test_session(origem, campanha, ad_id):
