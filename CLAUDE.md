@@ -81,23 +81,30 @@ abas) — `build.py` lê cada uma por **nome da aba**, via endpoint `gviz`
 | **Agendamentos** | `1cOD2Sa9fp8TPJrBia7RY3br_Htg5pCJc5squzmLY4Dk` | `Planilha agendamento` | agregado **diário**: `Data` (DD/MM, sem ano) · `Agendamentos Confirmados` · `Cirurgias Confirmadas` · `Valor Total Cirurgias` |
 | **Seguidores/Visitas ao Perfil** | `1P8ge3MO5jOZ415ObL_-noCy0G8-U8v7C-TV14aT6RGs` | **1 aba por mês**, nome em pt-BR (ex. `Setembro`) — `build.py` sempre lê a aba do **mês corrente do build** (`MESES_PT`/`main()`); meses passados em abas antigas não aparecem (limitação conhecida) | agregado **diário** preenchido à mão pelo cliente (Adveronix cobra à parte por essas 2 métricas): `Data` (DD/MM/AAAA — parser dedicado `parse_date_br()`, nunca `parse_date()`, que tentaria mm/dd primeiro e erraria os dias 1-12) · `Invest. (R$)` · `Seguid.` (seguidores ganhos no dia) · `Visitas ao perfil`. Cabeçalho tem células mescladas com texto longo — `header_index()` usada só com fallback posicional (colunas 1/3/4/6), nunca por alias. Vira `DATA.seguidores[]`, só no funil "Visitas ao Perfil" (`app.js::segTotals()`/`renderFunilPerfil`) — agregado da conta inteira, sem atribuição por anúncio, então só entra no card do funil e na tabela diária dessa aba, nunca nas 3 tabelas Campanha→Conjunto→Anúncio nem na Visão Geral/Relatório. Custo por Seguidor/Custo Por Visita usam o **Investimento desta própria planilha** (não o Gasto da Página 2), pra bater com o que o cliente já vê lá. |
 
-> ⚠️ **Não confundir** com a aba **"Leads"** (28 linhas, mesma planilha de
-> Sessões) — apesar do nome, ela é na verdade um registro **por agendamento**
-> (Procedimento/Atendimento/Decisão/Investimento, atribuído por anúncio via
-> "Origem"), preenchido pelo comercial depois do contato. **Não é lida** pelo
-> `build.py` — pode se sobrepor aos totais da planilha diária de Agendamentos
-> sem uma chave segura pra cruzar (nem telefone nem data exata em comum
-> confirmados), então fica de fora do pipeline por enquanto (nem leads[], nem
-> agenda[], pra não contar nada em dobro). Se o cliente quiser uma visão
-> "Agendamentos por anúncio" a partir dela, é feature nova a pedir.
+> ⚠️ **CORRIGIDO (14/09/2026):** a aba **"Leads"** (mesma planilha de Sessões)
+> NÃO é "um registro por agendamento" como esta nota afirmava antes. Conferido
+> contra o fonte do quiz (`quiz/index.html`, função `submitLead()`): ela é
+> gravada pelo próprio Apps Script a cada formulário enviado, **1 linha por
+> lead do quiz**, e suas colunas são exatamente o payload do quiz —
+> `Data/Hora · Nome · Telefone · Prioridade · Pontuação · Procedimento ·
+> Atendimento · Quando · Decisão · Já consultou · Investimento · Local ·
+> Origem`. É o mesmo conjunto de leads que hoje vem da aba Sessões
+> (`Status == "Enviou"`), só que **mais rico**: traz o Procedimento por lead
+> (que Sessões não tem) e a Prioridade Alta/Média já calculada.
+> Ainda **não é lida** pelo `build.py` — a troca da fonte de leads
+> (Sessões → Leads) está pendente de decisão, ver "Lacunas de dados".
 
 ### Regra de Lead Qualificado (MQL) e fontes de Leads
 Duas fontes de Leads, mantidas **separadas por `src`** (o gráfico "Leads por
 origem" já distingue):
 1. **Quiz/LP** (`src="meta"`) — aba **Sessões**, só `Status == "Enviou"`
    (completou o formulário) **E** com Origem/Campanha reconhecida (atribuível
-   a um anúncio do Meta — ver seção seguinte). MQL = coluna **"Pontuação" > 33**
-   (`build.py` → `is_qualified`). Linhas de teste (`ad_id`/`Origem`/`Campanha`
+   a um anúncio do Meta — ver seção seguinte). MQL = coluna **"Pontuação" >= 33**
+   (`build.py` → `is_qualified` + constante `CORTE_ALTA`). Esse corte é o
+   MESMO que o quiz aplica pra carimbar **"Prioridade: Alta"**
+   (`CFG.CORTE_ALTA = 33` em `quiz/index.html`) — tem que ser `>=` e não `>`,
+   senão o lead de pontuação exatamente 33 sai "Alta" na planilha e não-MQL
+   na dashboard. Se mudar o corte no quiz, mudar `CORTE_ALTA` junto. Linhas de teste (`ad_id`/`Origem`/`Campanha`
    contendo "test", ex. `TEST_AD_123`/`TESTE_AD_VINI`) são descartadas.
    > Sessões sem Origem/Campanha reconhecida (orgânico/direto, sem clique de
    > anúncio pra atribuir) **não entram em `leads[]`** — o cliente pediu que
@@ -121,9 +128,10 @@ origem" já distingue):
    > "Messaging Conversations Started" na extração automática (app Adveronix,
    > mesmo processo que já preenche `Página 1`) — sem trabalho manual diário.
 
-Como nenhuma das duas fontes atuais traz o procedimento de interesse
-(a aba Sessões não tem essa coluna — só a aba "Leads"/Agendamentos, que não
-é lida), os campos `prof`/`bucket` ficam fixos em `"Sem resposta"`; os
+Como nenhuma das duas fontes LIDAS HOJE traz o procedimento de interesse
+(a aba Sessões não tem essa coluna), os campos `prof`/`bucket` ficam fixos em
+`"Sem resposta"`; a aba **"Leads"** TEM a coluna Procedimento e resolveria
+isso — ver "Lacunas de dados"; os
 gráficos "Leads por procedimento" e "Procedimentos mais buscados" (`app.js`)
 mostram isso até existir uma fonte com o procedimento por lead.
 
@@ -174,6 +182,10 @@ não filtra por esse prefixo — mantém TODAS as campanhas no dashboard.
 ## Arquitetura / arquivos
 
 ```
+quiz/index.html           # FONTE do quiz de pré-atendimento (cópia fiel do que está no ar em
+                          # drviniciusdemello.netlify.app, arquivada aqui em 14/09/2026 para a
+                          # agência ter o controle). NÃO é publicada por este repo ainda.
+quiz/README.md            # o que é, o que está pendente (pixel/Lead, migração p/ Pages da agência)
 build/build.py            # lê os CSVs (read-only) de 4 planilhas separadas, emite REGISTROS BRUTOS (leads[]/meta[]/agenda[]/meta_other[]/seguidores[]/ad_links); render() COSTURA os 4 arquivos abaixo
 build/template.html       # esqueleto HTML. Placeholders __STYLES__, __APP_JS__, __DATA_JSON__, __BUILD_ID__, __GENERATED_BRT__
 build/identidade-visual.css  # TODAS as cores (tema claro=padrão / escuro). Mexa AQUI p/ trocar só cor
@@ -323,6 +335,13 @@ filtro cruzado bidirecional; tabela diária com último dia no topo; heatmap de 
 fixa por métrica.
 
 ## Lacunas de dados
+- **Procedimento por lead** → a aba lida hoje (Sessões) não tem a coluna, então
+  "Leads por procedimento" e "Procedimentos mais buscados" mostram "Sem
+  resposta". **Já existe fonte:** a aba **"Leads"** da mesma planilha traz
+  `Procedimento` por lead. Trocar a fonte de leads de `Sessões` para `Leads`
+  resolve — pendente de decisão porque o total de Leads foi calibrado na aba
+  Sessões pra bater com o Ads Manager, e a troca precisa ser validada contra
+  o gerenciador antes de virar padrão.
 - **Reuniões Realizadas / No‑Show** → a planilha de Agendamentos não distingue
   agendado × comparecido; aparece "-" até vir essa distinção.
 - **Agendamentos/Vendas/Faturamento por campanha/anúncio** → a planilha de

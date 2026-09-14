@@ -7,7 +7,8 @@ SEPARADAS do cliente Dr. Vinicius:
   - Leads (aba "Sessões"): fonte UNICA de leads — 1 linha por sessao do
     quiz/formulario de qualificacao (nao por lead "fechado"). So contam como
     lead as sessoes com Status == "Enviou" (completaram o formulario). Coluna
-    "Pontuacao" (0-100) e o escore de qualificacao; MQL = Pontuacao > 33.
+    "Pontuacao" (16-48) e o escore de qualificacao; MQL = Pontuacao >= 33
+    (identico ao corte "Prioridade: Alta" do proprio quiz, CFG.CORTE_ALTA=33).
     A aba "Leads" (28 linhas, com Procedimento/Atendimento/Decisao) NAO e
     lida aqui — e na verdade um recorte de agendamentos, nao de leads (ver
     nota abaixo).
@@ -101,6 +102,10 @@ SPREADSHEET_ID_LEADS = "1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I"
 SHEET_LEADS = "Sessões"
 # Campanhas de Engajamento/WhatsApp (clique abre conversa direto, sem quiz) —
 # identificadas pela substring abaixo no Campaign Name do Meta Ads.
+# Corte de MQL: o quiz carimba "Prioridade: Alta" com Pontuação >= 33
+# (CFG.CORTE_ALTA no index.html do quiz). MQL na dashboard = Prioridade Alta,
+# então este valor tem que acompanhar o do quiz.
+CORTE_ALTA = 33
 ENGAJAMENTO_TAG = "ENGJ"
 # Campanhas de Quiz/LP (funil E2-CAP) — identificadas pela substring abaixo.
 QUIZ_TAG = "LEADS"
@@ -230,8 +235,14 @@ def parse_date_br(v: str) -> str | None:
 
 
 def is_qualified(v: str | None) -> bool:
-    """Critério de MQL deste cliente: coluna "Pontuação" (aba Sessões) > 33."""
-    return to_float(v) > 33
+    """Critério de MQL deste cliente: coluna "Pontuação" >= CORTE_ALTA (33).
+
+    O corte é o MESMO que o quiz usa para carimbar "Prioridade: Alta"
+    (`CFG.CORTE_ALTA = 33` no index.html, aplicado pelo Apps Script). Tem que
+    ser >= e não >, senão o lead com pontuação exatamente 33 aparece como
+    "Alta" na planilha e como não-MQL na dashboard.
+    """
+    return to_float(v) >= CORTE_ALTA
 
 
 def valid_utm(campaign: str) -> bool:
@@ -653,7 +664,7 @@ def main():
     fat = sum(a["fat"] for a in data["agenda"])
     print("== build ok ==", file=sys.stderr)
     print(f"  periodo   : {b['date_min']} -> {b['date_max']}", file=sys.stderr)
-    print(f"  leads     : {len(data['leads'])} (quiz/LP: {n_quiz}  whatsapp: {n_wa})  MQLs (Pontuação > 33): {q}", file=sys.stderr)
+    print(f"  leads     : {len(data['leads'])} (quiz/LP: {n_quiz}  whatsapp: {n_wa})  MQLs (Pontuação >= {CORTE_ALTA}): {q}", file=sys.stderr)
     print(f"  agenda    : {len(data['agenda'])} dias com dado  vendas: {vd}  faturamento: R$ {fat:,.2f}", file=sys.stderr)
     n_fq = sum(1 for m in data["meta"] if m["funnel"] == "quiz")
     n_fw = sum(1 for m in data["meta"] if m["funnel"] == "whatsapp")

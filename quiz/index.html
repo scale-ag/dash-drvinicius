@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pré-atendimento — Dr. Vinícius Mello</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0E0E0E; --card:#191919; --ink:#F5F3EF; --text:#C7C5C0; --soft:#8A8880;
+    --accent:#A89581; --accent-dk:#8C7A66; --accent-lt:#26221B; --line:#2A2A2A; --cream:#FFFBF3;
+    --wpp:#25D366; --wpp-ink:#0b3d1f;
+    --hot:#E24B4A; --warm:#EF9F27; --cold:#8A8880;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+  header{padding:18px 22px 10px;display:flex;align-items:center;gap:12px}
+  .mono{width:48px;height:48px;border-radius:50%;background:var(--card);color:var(--cream);object-fit:cover;
+    display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;flex:none;letter-spacing:.5px;border:1px solid var(--line)}
+  header h1{font-size:17px;font-weight:600;line-height:1.1;color:var(--ink);letter-spacing:.01em}
+  header p{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.14em;font-weight:600;margin-top:3px}
+  .barwrap{padding:0 22px}
+  .bar{height:4px;background:var(--line);border-radius:999px;overflow:hidden}
+  .bar>i{display:block;height:100%;width:0;background:var(--accent);border-radius:999px;transition:width .35s ease}
+  main{flex:1;padding:24px 22px 28px}
+  .q{font-size:23px;font-weight:600;line-height:1.2;margin-bottom:20px;color:var(--ink);letter-spacing:-.01em}
+  .lead{font-size:15px;color:var(--soft);margin-bottom:22px}
+  .opt{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);
+    border-radius:12px;padding:15px 16px;margin-bottom:10px;font-size:15px;color:var(--ink);cursor:pointer;
+    transition:border-color .15s,background .15s;line-height:1.35}
+  .opt:hover,.opt:focus{border-color:var(--accent);background:var(--accent-lt);outline:none}
+  .cta{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;background:var(--accent);color:#1A1712;
+    border:none;border-radius:8px;padding:16px;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:.02em}
+  .cta:hover{background:var(--accent-dk)}
+  .cta.wpp{background:var(--wpp);color:var(--wpp-ink)}
+  .cta.wpp:hover{filter:brightness(.95)}
+  input{width:100%;font-family:inherit;font-size:15px;padding:14px 15px;border:1px solid var(--line);
+    border-radius:10px;margin-bottom:12px;background:#101010;color:var(--ink)}
+  input::placeholder{color:var(--soft)}
+  input:focus{border-color:var(--accent);outline:none}
+  .consent{font-size:12px;color:var(--soft);margin:4px 0 16px;line-height:1.45}
+  .center{text-align:center}
+  .result-h{font-size:24px;font-weight:600;margin:6px 0 6px;color:var(--ink)}
+  .sub{font-size:15px;color:var(--soft);margin-bottom:22px}
+  .recap{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:14px 16px;margin-top:18px;text-align:left}
+  .recap .row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid var(--line);font-size:13px;color:var(--soft)}
+  .recap .row:first-of-type{border-top:none}
+  .recap .row b{color:var(--ink);font-weight:500;text-align:right}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
+  .badges span{font-size:12px;color:var(--cream);background:var(--card);border:1px solid var(--line);padding:6px 12px;border-radius:999px}
+  footer{padding:16px 22px 28px;font-size:11px;color:var(--soft);text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img class="mono" id="mono" src="data:image/jpeg;base64,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" alt="Dr. Vinícius Mello">
+    <div>
+      <h1>Dr. Vinícius Mello</h1>
+      <p>Cirurgia Plástica</p>
+    </div>
+  </header>
+  <div class="barwrap"><div class="bar"><i id="bar"></i></div></div>
+  <main id="stage"></main>
+  <footer>
+    Dr. Vinícius Brito de Mello · Cirurgia Plástica · CRM-XX 000000 · RQE 00000<br>
+    A indicação de procedimento e o planejamento cirúrgico dependem de consulta médica e avaliação individual.
+  </footer>
+</div>
+
+<script>
+/* ================= CONFIG (editar aqui) ================= */
+const CFG = {
+  WPP: "556299901615",            // WhatsApp da clínica (62 9990-1615)
+  PIXEL_ID: "1601913367590883",   // Pixel do Dr. Vinícius (o mesmo da LP)
+  CONV_EVENT: "Lead",             // evento de conversão = Lead (casa com a otimização dos conjuntos da campanha do Quiz). Antes era Schedule.
+  LEAD_ENDPOINT: "https://script.google.com/macros/s/AKfycbx_t7W_2UEfSUsjdEjsJ06LPC5TrU2i5FalR4ENwPidWERY3iLgELLtUqENjeicxrOObA/exec",  // URL /exec do Apps Script
+  SHOW_SCORE: false,              // false = paciente NÃO vê resumo/prioridade na tela final (só a secretária recebe). Versão no ar.
+  CORTE_ALTA: 33,
+  CORTE_MEDIA: 21
+};
+/* ======================================================== */
+
+const steps = [
+  {type:"intro"},
+  {key:"procedimento", q:"Qual procedimento você tem em mente?", score:false, opts:[
+    {t:"Abdominoplastia", v:"Abdominoplastia"},
+    {t:"Mamoplastia", v:"Mamoplastia"},
+    {t:"Lipoaspiração", v:"Lipoaspiração"},
+    {t:"Pós-bariátrica / contorno corporal", v:"Pós-bariátrica"},
+    {t:"Face", v:"Face"}]},
+  {key:"plano", q:"Como você pretende fazer seu atendimento?", opts:[
+    {t:"Particular", v:"Particular", p:5},
+    {t:"Pela Unimed", v:"Unimed", p:4},
+    {t:"Por outro plano de saúde", v:"Outro plano", p:-99}]},
+  {key:"momento", q:"Quando você pretende realizar?", opts:[
+    {t:"O quanto antes", v:"O quanto antes", p:10},
+    {t:"Nos próximos 3 meses", v:"Próximos 3 meses", p:7},
+    {t:"Ainda este ano", v:"Este ano", p:4},
+    {t:"Só pesquisando por enquanto", v:"Só pesquisando", p:1}]},
+  {key:"decisao", q:"Como você está em relação a fazer a cirurgia?", opts:[
+    {t:"Já decidi, só preciso do cirurgião certo", v:"Já decidiu", p:10},
+    {t:"Estou decidida, mas quero avaliar bem", v:"Decidida, avaliando", p:7},
+    {t:"Ainda avaliando a possibilidade", v:"Avaliando", p:4},
+    {t:"Só curiosidade por enquanto", v:"Curiosidade", p:1}]},
+  {key:"historico", q:"Você já passou por consulta com cirurgião plástico?", opts:[
+    {t:"Não, seria a primeira vez", v:"Primeira vez", p:5},
+    {t:"Sim, mas não avancei", v:"Consultou, não avançou", p:7},
+    {t:"Sim, e busco uma segunda opinião", v:"Segunda opinião", p:8}]},
+  {key:"investimento", q:"Você já pensou em como pretende investir no procedimento?", opts:[
+    {t:"Sim, já me organizei para isso", v:"Organizada", p:10},
+    {t:"Pretendo parcelar / me organizar", v:"Vai parcelar", p:7},
+    {t:"Ainda não pensei nessa parte", v:"Não pensou", p:2}]},
+  {key:"local", q:"Você mora em Goiânia ou viria de outra cidade?", opts:[
+    {t:"Moro em Goiânia", v:"Goiânia", p:5},
+    {t:"Moro em outra cidade de Goiás", v:"Outra cidade de Goiás", p:4},
+    {t:"Sou de outro estado, mas posso viajar para me consultar com o Dr.", v:"Outro estado, viaja", p:3}]},
+  {type:"contato"},
+  {type:"fim"}
+];
+
+const ans = {};
+let i = 0;
+const stage = document.getElementById("stage");
+const bar = document.getElementById("bar");
+let started = false;
+
+const params = new URLSearchParams(location.search);
+const origem = params.get("utm_content") || params.get("ad_id") || params.get("ad") || "";
+const campanha = params.get("utm_campaign") || params.get("campanha") || params.get("campaign") || "";
+const attrib = {
+  ad_id: params.get("ad_id")||"", adset_id: params.get("adset_id")||"",
+  campaign_id: params.get("campaign_id")||"", utm_content: params.get("utm_content")||"",
+  campanha: campanha
+};
+
+function fbq_safe(){ if(CFG.PIXEL_ID && window.fbq){ fbq.apply(null, arguments); } }
+
+/* --- Rastreamento de etapas do funil (pixel + planilha) --- */
+var SID = (function(){
+  try{ var k="dv_sid", s=sessionStorage.getItem(k);
+    if(!s){ s=Date.now().toString(36)+Math.random().toString(36).slice(2,8); sessionStorage.setItem(k,s); }
+    return s;
+  }catch(e){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+})();
+
+function beacon(payload){
+  if(!CFG.LEAD_ENDPOINT) return;
+  try{
+    var body=JSON.stringify(payload);
+    if(navigator.sendBeacon){
+      navigator.sendBeacon(CFG.LEAD_ENDPOINT, new Blob([body],{type:"text/plain;charset=utf-8"}));
+    }else{
+      fetch(CFG.LEAD_ENDPOINT,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:body});
+    }
+  }catch(e){}
+}
+
+function trackStep(idx){
+  var s=steps[idx]||{};
+  var key=s.key||s.type||("step"+idx);
+  fbq_safe("trackCustom","QuizStep",{step_num:idx, step_key:key});
+  beacon({type:"step", sid:SID, step_num:idx, step_key:key,
+    ad_id:attrib.ad_id, adset_id:attrib.adset_id, campaign_id:attrib.campaign_id, origem:origem, campanha:campanha});
+}
+
+function render(){
+  bar.style.width = Math.round(i/(steps.length-1)*100)+"%";
+  const s = steps[i];
+  stage.innerHTML = "";
+  window.scrollTo(0,0);
+  trackStep(i);
+
+  if(s.type==="intro"){
+    stage.innerHTML =
+      '<h2 class="q">Comece seu pré-atendimento para cirurgia plástica</h2>'+
+      '<p class="lead">Responda algumas perguntas rápidas para que a equipe do Dr. Vinícius entenda seu caso e oriente os próximos passos da sua jornada — com clareza, cuidado e responsabilidade.</p>'+
+      '<div class="badges">'+
+        '<span>Cirurgia Plástica</span>'+
+        '<span>Pré-atendimento seguro</span>'+
+        '<span>Atendimento humanizado</span>'+
+      '</div>';
+    button("Iniciar meu pré-atendimento", ()=>{ if(!started){started=true; fbq_safe('trackCustom','PreAtendimentoStart');} i++; render(); });
+    return;
+  }
+
+  if(s.type==="contato"){
+    stage.innerHTML =
+      '<h2 class="q">Quase lá!</h2>'+
+      '<p class="lead">Deixe seu contato para a equipe do Dr. Vinícius falar com você.</p>'+
+      '<input id="nome" placeholder="Seu nome" autocomplete="name">'+
+      '<input id="fone" placeholder="Seu WhatsApp com DDD" inputmode="tel" autocomplete="tel">'+
+      '<p class="consent">Ao continuar, você concorda em ser contatada pela equipe do Dr. Vinícius Mello. Seus dados não são compartilhados com terceiros.</p>';
+    button("Enviar meu pré-atendimento", ()=>{
+      const nome=val("nome"), fone=val("fone");
+      if(!nome || fone.replace(/\D/g,"").length < 10){ alert("Por favor, preencha nome e um WhatsApp válido com DDD."); return; }
+      ans.nome=nome; ans.fone=fone;
+      submitLead();
+      i++; render();
+    });
+    return;
+  }
+
+  if(s.type==="fim"){ finish(); return; }
+
+  stage.innerHTML = '<h2 class="q">'+s.q+'</h2>';
+  s.opts.forEach(o=>{
+    const b=document.createElement("button");
+    b.className="opt"; b.textContent=o.t;
+    b.onclick=()=>{ ans[s.key]={v:o.v, p:o.p||0, score:s.score!==false}; if(o.p===-99){ disqualify(); return; } i++; render(); };
+    stage.appendChild(b);
+  });
+}
+
+function button(label, fn){
+  const b=document.createElement("button");
+  b.className="cta"; b.textContent=label; b.onclick=fn;
+  stage.appendChild(b);
+}
+function val(id){ return (document.getElementById(id).value||"").trim(); }
+
+function score(){
+  let t=0; for(const k in ans){ const a=ans[k]; if(a && a.score) t+=a.p; } return t;
+}
+
+function submitLead(){
+  const total=score();
+  if(CFG.PIXEL_ID && window.fbq){
+    var ph=(ans.fone||"").replace(/\D/g,""); if(ph && ph.length<=11) ph="55"+ph;
+    var fn=(ans.nome||"").trim().split(/\s+/)[0].toLowerCase();
+    try{ fbq('init', CFG.PIXEL_ID, {ph:ph, fn:fn}); }catch(e){}
+  }
+  fbq_safe('track', CFG.CONV_EVENT);
+  if(!CFG.LEAD_ENDPOINT) return;
+  const payload={
+    nome:ans.nome, fone:ans.fone,
+    procedimento:ans.procedimento?ans.procedimento.v:"", plano:ans.plano?ans.plano.v:"",
+    momento:ans.momento?ans.momento.v:"", decisao:ans.decisao?ans.decisao.v:"",
+    historico:ans.historico?ans.historico.v:"", investimento:ans.investimento?ans.investimento.v:"",
+    local:ans.local?ans.local.v:"", pontuacao:total, origem:origem, campanha:campanha, ad_id:attrib.ad_id,
+    adset_id:attrib.adset_id, campaign_id:attrib.campaign_id, data:new Date().toISOString(),
+    type:"lead", sid:SID, step_num:9
+  };
+  try{
+    fetch(CFG.LEAD_ENDPOINT,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
+  }catch(e){}
+}
+
+function disqualify(){
+  bar.style.width="100%";
+  fbq_safe("trackCustom","QuizDisqualify");
+  beacon({type:"dq", sid:SID, step_num:i, step_key:"plano_outro",
+    ad_id:attrib.ad_id, adset_id:attrib.adset_id, campaign_id:attrib.campaign_id, origem:origem, campanha:campanha});
+  stage.innerHTML=
+    '<div class="center" style="padding:.4rem 0 1rem">'+
+    '<h2 class="result-h">Agradecemos por compartilhar 💛</h2>'+
+    '<p class="sub">No momento, o Dr. Vinícius realiza atendimentos <b style="color:var(--ink)">de forma particular</b> e <b style="color:var(--ink)">pela Unimed</b>. Se algum desses caminhos fizer sentido pra você, será um prazer te atender — é só refazer suas respostas abaixo.</p>'+
+    '</div>';
+  button("Refazer minhas respostas", ()=>{ restart(); });
+}
+
+function restart(){
+  for(const k in ans){ delete ans[k]; }
+  i=0; started=false; render();
+}
+
+function finish(){
+  bar.style.width="100%";
+  fbq_safe('trackCustom','PreAtendimentoComplete');
+
+  const total=score();
+  const linhas=[
+    "Olá! Fiz o pré-atendimento no site do Dr. Vinícius.","",
+    "Nome: "+ans.nome,
+    "Procedimento: "+(ans.procedimento?ans.procedimento.v:"—"),
+    "Atendimento: "+(ans.plano?ans.plano.v:"—"),
+    "Quando pretende: "+ans.momento.v,
+    "Decisão: "+ans.decisao.v,
+    "Já consultou: "+ans.historico.v,
+    "Investimento: "+ans.investimento.v,
+    "Local: "+ans.local.v
+  ];
+  if(origem) linhas.push("Origem: "+origem);
+  linhas.push("", "Quero agendar minha avaliação.");
+  const msg=encodeURIComponent(linhas.join("\n"));
+
+  stage.innerHTML=
+    '<div class="center">'+
+    '<h2 class="result-h" style="margin-top:8px">Pronto, '+esc(ans.nome)+'!</h2>'+
+    '<p class="sub">Seu pré-atendimento foi registrado. Toque no botão abaixo para falar agora com a equipe do Dr. Vinícius pelo WhatsApp — é o caminho mais rápido para agendar sua avaliação.</p>'+
+    '</div>';
+
+  const a=document.createElement("a");
+  a.className="cta wpp"; a.href="https://wa.me/"+CFG.WPP+"?text="+msg;
+  a.rel="noopener"; a.innerHTML='<span style="font-size:20px">💬</span> Falar no WhatsApp';
+  a.onclick=()=>fbq_safe('trackCustom','WhatsAppClick');
+  stage.appendChild(a);
+
+  /* Resumo e Prioridade NÃO são mostrados à paciente — vão só pra secretária (msg do WhatsApp + planilha). */
+}
+
+function esc(s){ return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+if(CFG.PIXEL_ID){
+  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', CFG.PIXEL_ID);
+  fbq('track', 'PageView');
+}
+
+render();
+</script>
+</body>
+</html>
