@@ -37,32 +37,44 @@ Pontuação: mínimo real 16, máximo 48 (a pergunta de procedimento tem
 
 ## Pendências conhecidas
 
-### 1. Evento `Lead` no Meta Ads não está marcando direito
+### 1. Evento `Lead` no Meta Ads não está marcando
 
-O que este fonte **prova** (e portanto elimina como causa): o site no ar já
-está com `CONV_EVENT: "Lead"` e chama `fbq('track','Lead')` em `submitLead()`.
-A troca de `Schedule` para `Lead` (10/08) **foi publicada**. Não é caso de
-"esqueceram de republicar o HTML".
+**Estado em 14/09/2026: ainda aberto.** O que já foi descartado, com prova:
 
-Pontos do código que ainda podem derrubar/subnotificar o evento:
+| Hipótese | Veredito | Como foi testada |
+|---|---|---|
+| "Não republicaram o HTML depois de trocar Schedule→Lead (10/08)" | ❌ descartada | O view-source do site no ar já tem `CONV_EVENT: "Lead"` |
+| "O formulário/Apps Script quebrou" | ❌ descartada | Teste real em 14/09 05:02 gravou a linha na aba Leads normalmente |
+| "`fbq.apply(null, arguments)` em `fbq_safe()` mata a chamada" | ❌ descartada | Fluxo completo rodado em Chromium headless com `fbq` instrumentado: as 16 chamadas (init, PageView, 10× QuizStep, Lead com eventID, PreAtendimentoComplete) chegam ao pixel, nas duas versões. O script não roda em strict mode, então `this` vira o objeto global e a chamada é idêntica à direta. |
 
-- **`fbq('init', PIXEL_ID, {ph, fn})` é chamado uma segunda vez** dentro de
-  `submitLead()`, com o pixel já inicializado no rodapé da página. Meta trata
-  re-init do mesmo pixel como "Duplicate Pixel ID". É o caminho documentado
-  para advanced matching manual, mas convém confirmar no Events Manager que
-  não está sendo descartado.
-- **Não há `eventID`** no `track`. Sem chave de deduplicação não dá para somar
-  a Conversions API depois, e hoje 100% do sinal depende do navegador —
-  ATT/iOS, bloqueador e ITP comem uma fatia que pode ser grande. É a
-  explicação mais provável para "a planilha tem mais lead do que o gerenciador".
-- **Sem Conversions API.** Só pixel de navegador.
+Ou seja: **o quiz dispara `fbq('track','Lead')` corretamente.** O problema está
+entre o navegador e o Events Manager, não no código do formulário.
 
-Teste que decide (1 minuto, não precisa mexer em código): Events Manager →
-**Testar eventos** → abrir o quiz no navegador → completar o formulário.
-- `Lead` aparece → o código está certo; o problema é configuração de
-  otimização/atribuição (ex.: a campanha otimizando uma conversão
-  personalizada antiga em vez do evento padrão `Lead`).
-- `Lead` NÃO aparece → o problema é no disparo, e aí vale mexer no código acima.
+O fato que ainda não tem explicação: nos Eventos de teste de 14/09 apareceu
+**só o `PageView`**, e nenhum dos `trackCustom` (`QuizStep` dispara em toda
+troca de tela) nem o `Lead`. Como o disparo está provado, sobra:
+
+1. **`fbevents.js` não carregou** (bloqueador, extensão, DNS, ITP). Sem a
+   biblioteca, `fbq` continua sendo o stub e as chamadas ficam presas em
+   `fbq.queue` — nada sai do navegador. Não explica o PageView ter chegado,
+   a menos que ele tenha vindo de outra origem.
+2. **Filtro do painel.** O seletor ao lado de "Limpar atividade" estava em
+   "5 opções selecionadas" — pode estar escondendo eventos recebidos.
+3. **Defasagem do próprio painel** — o PageView é de 05:02:29 e o lead foi
+   gravado às 05:02:56; se a captura de tela saiu nesse intervalo, o Lead
+   ainda não teria aparecido.
+4. **Configuração de otimização/atribuição** — a campanha otimizando uma
+   conversão personalizada antiga em vez do evento padrão `Lead`.
+
+**Instrumento para fechar o diagnóstico:** abrir o quiz com `?fbdebug=1` e o
+console do navegador aberto. Cada chamada vira uma linha `[pixel] enviado: …`
+e, no momento do Lead, `fbDiag()` imprime **se o `fbevents.js` carregou** e
+quantas chamadas estão presas na fila. Isso separa (1) de (2)/(3)/(4) de vez.
+
+Melhoria já aplicada: o `Lead` agora vai com **`eventID`** (`<sid>-lead`), e o
+mesmo id é gravado no payload da planilha (`event_id`). Sem isso não dá para
+somar a Conversions API depois sem contar o mesmo lead duas vezes — e a CAPI é
+o caminho para recuperar o sinal que o navegador perde (ATT/iOS, bloqueadores).
 
 ### 2. Migração para a agência
 

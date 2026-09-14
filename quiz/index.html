@@ -129,6 +129,23 @@ const bar = document.getElementById("bar");
 let started = false;
 
 const params = new URLSearchParams(location.search);
+/* ?fbdebug=1 na URL loga no console cada chamada ao pixel (para conferir o
+   disparo do Lead sem depender só dos Eventos de teste). */
+const FB_DEBUG = params.get("fbdebug") === "1";
+/* Diagnóstico do pixel: distingue "a biblioteca do Meta nem carregou" (as
+   chamadas ficam presas em fbq.queue e nada sai do navegador) de "carregou e
+   enviou" (aí um evento que não aparece no Events Manager é problema de
+   configuração/atribuição, não de disparo). Só roda com ?fbdebug=1. */
+function fbDiag(tag){
+  if(!FB_DEBUG || !window.console) return;
+  var f = window.fbq;
+  if(!f){ console.warn('[pixel]', tag, '— window.fbq NAO EXISTE'); return; }
+  var carregou = !!f.callMethod;
+  console.log('[pixel]', tag,
+    '| fbevents.js carregado:', carregou ? 'SIM' : 'NAO (chamadas presas na fila)',
+    '| na fila:', (f.queue && f.queue.length) || 0);
+}
+window.addEventListener('load', function(){ setTimeout(function(){ fbDiag('apos load'); }, 2500); });
 const origem = params.get("utm_content") || params.get("ad_id") || params.get("ad") || "";
 const campanha = params.get("utm_campaign") || params.get("campanha") || params.get("campaign") || "";
 const attrib = {
@@ -137,7 +154,24 @@ const attrib = {
   campanha: campanha
 };
 
-function fbq_safe(){ if(CFG.PIXEL_ID && window.fbq){ fbq.apply(null, arguments); } }
+/* Forma explícita de chamada (sem .apply) + log opcional.
+   NOTA: o `fbq.apply(null, arguments)` da versão anterior NÃO era o bug.
+   Testado em Chromium headless com o fluxo completo do quiz: o script não roda
+   em strict mode, então `this` vira o objeto global e a chamada é idêntica à
+   direta — as 16 chamadas (incluindo o Lead) chegam ao pixel nas duas versões.
+   Mantido assim só por clareza e pelo log de diagnóstico abaixo. */
+function fbq_safe(a, b, c, d){
+  if(!CFG.PIXEL_ID || !window.fbq) return;
+  try{
+    if(d !== undefined)      window.fbq(a, b, c, d);
+    else if(c !== undefined) window.fbq(a, b, c);
+    else                     window.fbq(a, b);
+    if(FB_DEBUG && window.console) console.log('[pixel] enviado:', a, b, c || '');
+    if(FB_DEBUG && b === CFG.CONV_EVENT) fbDiag('no disparo do ' + b);
+  }catch(e){
+    if(window.console && console.warn) console.warn('[pixel] FALHOU:', a, b, e);
+  }
+}
 
 /* --- Rastreamento de etapas do funil (pixel + planilha) --- */
 var SID = (function(){
@@ -233,7 +267,11 @@ function submitLead(){
     var fn=(ans.nome||"").trim().split(/\s+/)[0].toLowerCase();
     try{ fbq('init', CFG.PIXEL_ID, {ph:ph, fn:fn}); }catch(e){}
   }
-  fbq_safe('track', CFG.CONV_EVENT);
+  /* eventID = chave de deduplicação. Hoje só o navegador envia, mas com ela
+     dá pra somar a Conversions API depois sem contar o mesmo lead duas vezes
+     (o mesmo id vai no payload da planilha, campo event_id). */
+  const eventId = SID + "-lead";
+  fbq_safe('track', CFG.CONV_EVENT, {}, {eventID: eventId});
   if(!CFG.LEAD_ENDPOINT) return;
   const payload={
     nome:ans.nome, fone:ans.fone,
@@ -242,7 +280,7 @@ function submitLead(){
     historico:ans.historico?ans.historico.v:"", investimento:ans.investimento?ans.investimento.v:"",
     local:ans.local?ans.local.v:"", pontuacao:total, origem:origem, campanha:campanha, ad_id:attrib.ad_id,
     adset_id:attrib.adset_id, campaign_id:attrib.campaign_id, data:new Date().toISOString(),
-    type:"lead", sid:SID, step_num:9
+    type:"lead", sid:SID, step_num:9, event_id:eventId
   };
   try{
     fetch(CFG.LEAD_ENDPOINT,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
