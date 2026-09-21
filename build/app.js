@@ -1195,24 +1195,22 @@ function renderFunilPerfil(funil, ids){
     ['Impressões', intf(t.im), [['CPM',brl(dv.cpm)]]],
     ['Cliques', intf(t.cl), [['CTR',pct(dv.ctr)],['CPC',brl(dv.cpc)]]],
     ['Seguidores', intf(st.seg), [['Custo por Seguidor',brl(st.cps)]]],
-    ['Visitas ao Perfil', intf(st.vis), [['Custo Por Visita no Perfil',brl(st.cpv)]]],
   ];
   document.getElementById(ids.funnel).innerHTML=funnelHTML(steps);
 
   comboChartAds(ids.combo, daily([],fM,[]));
 
   const segByDate={}; seguidoresActive().forEach(s=>{ segByDate[s.d]=s; });
-  function segCellsFor(d){ const s=segByDate[d]; if(!s) return {seg:null,cps:null,vis:null,cpvisita:null};
+  function segCellsFor(d){ const s=segByDate[d]; if(!s) return {seg:null,cps:null};
     const g2=(s.inv||0)*taxf();
-    return {seg:s.seg, cps:s.seg?g2/s.seg:null, vis:s.vis, cpvisita:s.vis?g2/s.vis:null}; }
+    return {seg:s.seg, cps:s.seg?g2/s.seg:null}; }
   const dailyColsPf = DAILY_COLS_ADS.concat([
     {key:'seg',label:'Seguidores',type:'int'},{key:'cps',label:'Custo por Seguidor',type:'brl'},
-    {key:'vis',label:'Visitas ao Perfil',type:'int'},{key:'cpvisita',label:'Custo Por Visita no Perfil',type:'brl'},
   ]);
   const dl=daily([],fM,[]).slice().reverse();
   renderTable({id:ids.daily, cols:dailyColsPf, center:true, fit:true,
     rows:dl.map(x=>{const d=derive(x); return {k:x.d, cells:{...dailyCellsAds(x,d), ...segCellsFor(x.d)}};}),
-    total:(()=>{const d=derive(t); return {...dailyCellsAds({...t,d:null},d,true), seg:st.seg, cps:st.cps, vis:st.vis, cpvisita:st.cpv};})(),
+    total:(()=>{const d=derive(t); return {...dailyCellsAds({...t,d:null},d,true), seg:st.seg, cps:st.cps};})(),
     selectable:true, selSet:STATE.selDays,
     onSelect:(k,e)=>{ toggleSet(STATE.selDays,k,e&&(e.ctrlKey||e.metaKey)); syncDateInputs(); renderAll(); },
   });
