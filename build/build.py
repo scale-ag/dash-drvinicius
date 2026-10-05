@@ -89,6 +89,7 @@ import sys
 import unicodedata
 import urllib.parse
 import urllib.request
+import zipfile
 from datetime import datetime, timezone, timedelta
 
 SPREADSHEET_ID_META = "1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ"
@@ -106,15 +107,23 @@ ENGAJAMENTO_TAG = "ENGJ"
 QUIZ_TAG = "LEADS"
 SPREADSHEET_ID_AGENDA = "1cOD2Sa9fp8TPJrBia7RY3br_Htg5pCJc5squzmLY4Dk"
 SHEET_AGENDA = "Planilha agendamento"
-# Planilha de Seguidores/Visitas ao Perfil (funil "Visitas ao Perfil") —
-# preenchida manualmente pelo cliente (Adveronix cobra à parte por essas 2
-# métricas). 1 aba POR MÊS, nomeada pelo mês em português (ex. "Setembro"),
-# 1 linha por dia. build.py sempre lê a aba do mês corrente do build — ver
-# `MESES_PT`/uso em main(). Só mostra o mês corrente; meses passados em
-# abas antigas não entram (limitação conhecida, aceitável por enquanto).
-SPREADSHEET_ID_SEGUIDORES = "1P8ge3MO5jOZ415ObL_-noCy0G8-U8v7C-TV14aT6RGs"
+# Planilha de Seguidores (funil "Visitas ao Perfil") — "Controle de tráfego",
+# preenchida manualmente pelo cliente (Adveronix cobra à parte por essa
+# métrica). 1 aba de tráfego diário POR MÊS, prefixada com 📈 (ex.
+# "📈 Outubro"), 1 linha por dia; a seção "META — Seguidores" traz
+# Invest. (R$) e Seguid. build.py lê a aba do mês corrente do build — ver
+# pick_month_sheet()/uso em main(). Só mostra o mês corrente; meses passados
+# em abas antigas não entram (limitação conhecida, aceitável por enquanto).
+SPREADSHEET_ID_SEGUIDORES = "1hajaZpK-2cGY4TEpVGTfM7DljZk0M9fiLO6qylC29Gw"
+# As abas mensais oscilam entre nome completo e abreviado ("📈 Outubro" mas
+# "📈 Nov"), por isso as duas listas — pick_month_sheet() tenta as duas.
 MESES_PT = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho",
             "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul",
+               "Ago", "Set", "Out", "Nov", "Dez"]
+# Abas de tráfego diário usam este prefixo; as "📋" são outro tipo de aba
+# (mesmo mês, conteúdo diferente) e não podem ser confundidas com elas.
+SHEET_TRAFEGO_PREFIX = "📈"
 # gviz por NOME da aba (nao pelo gid) — funciona independente de qual posicao
 # a aba ocupa na planilha, so exige que a planilha esteja "qualquer um com o
 # link pode ver".
@@ -165,6 +174,34 @@ def load_rows(url: str, local: str | None) -> list[list[str]]:
 
 def sheet_url(spreadsheet_id: str, sheet_name: str) -> str:
     return EXPORT_URL.format(sid=spreadsheet_id, sheet=urllib.parse.quote(sheet_name))
+
+
+def list_sheet_names(spreadsheet_id: str) -> list[str]:
+    """Nomes REAIS das abas, lidos do export .xlsx. Necessário porque o gviz,
+    quando o nome da aba não existe, cai SILENCIOSAMENTE na 1ª aba e devolve
+    dados de outra planilha sem erro nenhum — então montar o nome por string
+    ("📈 " + mês) arriscaria publicar número errado sem ninguém perceber."""
+    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=xlsx"
+    req = urllib.request.Request(url, headers={"User-Agent": "dash-template-bot/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        raw = resp.read()
+    with zipfile.ZipFile(io.BytesIO(raw)) as z:
+        wb = z.read("xl/workbook.xml").decode("utf-8", errors="replace")
+    return re.findall(r'<sheet[^>]*\bname="([^"]*)"', wb)
+
+
+def pick_month_sheet(names: list[str], month: int) -> str | None:
+    """Aba de tráfego diário do mês pedido, entre os nomes reais. Tenta o nome
+    completo e depois o abreviado (a planilha usa os dois). Devolve None se não
+    achar — quem chama decide o que fazer, mas nunca se chuta um nome."""
+    def token(s):           # "📈 Outubro" -> "outubro" (sem emoji/espaço/acento)
+        return re.sub(r"[^a-z]", "", norm(s))
+    cands = [n for n in names if SHEET_TRAFEGO_PREFIX in n]
+    for want in (token(MESES_PT[month - 1]), token(MESES_ABREV[month - 1])):
+        for n in cands:
+            if token(n) == want:
+                return n
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -513,15 +550,17 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows
             continue
         agenda.append({"d": d, "agendamentos": agendamentos, "vendas": cirurgias, "fat": round(fat, 2)})
 
-    # Seguidores/Visitas ao Perfil — planilha separada, preenchida manualmente
-    # (1 linha/dia: Investimento (R$), Seguidores ganhos, Visitas ao Perfil).
-    # Cabeçalho da planilha tem células mescladas com texto longo (não dá pra
-    # confiar em match por alias — ex. a coluna de Investimento contém a
-    # palavra "Seguidores" no meio do texto) — por isso só posição fixa.
+    # Seguidores — aba mensal de tráfego diário da planilha "Controle de
+    # tráfego", seção "META — Seguidores" (1 linha/dia: Invest. (R$) e
+    # Seguid.). O gviz achata o cabeçalho de 4 linhas numa só e a aba tem
+    # outras seções (WhatsApp/Lead Ads/Landing Page) com colunas de mesmo
+    # nome, então match por alias não serve — só posição fixa:
+    #   [1] Data · [12] META—Seguidores Invest. (R$) · [13] Seguid.
+    # As linhas de cabeçalho caem fora sozinhas (parse_date_br devolve None).
     sgheader = seguidores_rows[0] if seguidores_rows else []
     sgidx = header_index(
-        sgheader, {"date": [], "invest": [], "seguidores": [], "visitas": []},
-        {"date": 1, "invest": 3, "seguidores": 4, "visitas": 6},
+        sgheader, {"date": [], "invest": [], "seguidores": []},
+        {"date": 1, "invest": 12, "seguidores": 13},
     )
     seguidores = []
     for row in seguidores_rows[1:]:
@@ -532,10 +571,9 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows
             continue
         inv = to_float(cell(row, sgidx["invest"]))
         seg = to_float(cell(row, sgidx["seguidores"]))
-        vis = to_float(cell(row, sgidx["visitas"]))
-        if inv == 0 and seg == 0 and vis == 0:
+        if inv == 0 and seg == 0:
             continue
-        seguidores.append({"d": d, "inv": round(inv, 4), "seg": seg, "vis": vis})
+        seguidores.append({"d": d, "inv": round(inv, 4), "seg": seg})
 
     dates = sorted({d for d in (
         [l["d"] for l in leads if l["d"]] + [m["d"] for m in meta if m["d"]] + [a["d"] for a in agenda if a["d"]]
@@ -631,8 +669,15 @@ def main():
     leads_rows = load_rows(sheet_url(SPREADSHEET_ID_LEADS, SHEET_LEADS), args.leads_file)
     agenda_rows = load_rows(sheet_url(SPREADSHEET_ID_AGENDA, SHEET_AGENDA), args.agenda_file)
     meta_other_rows = load_rows(sheet_url(SPREADSHEET_ID_META, SHEET_META_OTHER), args.meta_other_file)
-    sheet_seguidores = MESES_PT[datetime.now(BRT).month - 1]
-    seguidores_rows = load_rows(sheet_url(SPREADSHEET_ID_SEGUIDORES, sheet_seguidores), args.seguidores_file)
+    # Aba de Seguidores do mês corrente — resolvida a partir dos nomes REAIS
+    # das abas (ver pick_month_sheet). Não achando, segue sem Seguidores em vez
+    # de derrubar o build inteiro ou ler a aba errada; o resumo no fim avisa.
+    if args.seguidores_file:
+        sheet_seguidores, seguidores_rows = args.seguidores_file, load_rows("", args.seguidores_file)
+    else:
+        mes = datetime.now(BRT).month
+        sheet_seguidores = pick_month_sheet(list_sheet_names(SPREADSHEET_ID_SEGUIDORES), mes)
+        seguidores_rows = load_rows(sheet_url(SPREADSHEET_ID_SEGUIDORES, sheet_seguidores), None) if sheet_seguidores else []
 
     data = process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows)
 
@@ -663,8 +708,11 @@ def main():
     print(f"  meta_other: {len(data['meta_other'])} linhas (funil Visitas ao Perfil)  gasto: R$ {mo_sp:,.2f}", file=sys.stderr)
     n_seg = len(data["seguidores"])
     tot_seg = sum(s["seg"] for s in data["seguidores"])
-    tot_vis = sum(s["vis"] for s in data["seguidores"])
-    print(f"  seguidores: aba {sheet_seguidores!r}  {n_seg} dias com dado  seguidores: {tot_seg:.0f}  visitas ao perfil: {tot_vis:.0f}", file=sys.stderr)
+    tot_inv = sum(s["inv"] for s in data["seguidores"])
+    if sheet_seguidores:
+        print(f"  seguidores: aba {sheet_seguidores!r}  {n_seg} dias com dado  seguidores: {tot_seg:.0f}  invest: R$ {tot_inv:,.2f}", file=sys.stderr)
+    else:
+        print("  seguidores: !! ABA DO MES NAO ENCONTRADA na planilha de Seguidores — secao fica zerada", file=sys.stderr)
     print(f"  out       : {args.out}", file=sys.stderr)
 
 

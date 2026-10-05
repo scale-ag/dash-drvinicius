@@ -1175,16 +1175,16 @@ function renderFunilLeads(funil, ids){
    topo, não de captura), então não tem seção de MQLs/qualificação/CAC nem
    tabela de leads qualificados; usa comboChartAds/cpcByDimChart (Cliques/CPC
    no lugar de Leads/CPMQL) e colunas de tabela sem Leads/MQL/Vendas. */
-/* Seguidores/Visitas ao Perfil: planilha manual à parte (sem atribuição por
-   anúncio, então só entram no card do funil e na tabela diária — nunca nas
-   3 tabelas Campanha→Conjunto→Anúncio). Custo usa o MESMO Investimento (R$)
-   que o cliente já preenche nessa planilha pra calcular CPS/Custo-por-Visita
-   — não o Gasto da Página 2 — pra bater exatamente com o que ele vê lá. */
+/* Seguidores: planilha manual à parte ("Controle de tráfego", seção
+   META — Seguidores), sem atribuição por anúncio — então só entra no card do
+   funil e na tabela diária, nunca nas 3 tabelas Campanha→Conjunto→Anúncio.
+   O CPS usa o MESMO Investimento (R$) que o cliente preenche nessa planilha,
+   não o Gasto da Página 2, pra bater exatamente com o que ele vê lá. */
 function segTotals(){
-  let seg=0, vis=0, inv=0;
-  seguidoresActive().forEach(s=>{ seg+=s.seg||0; vis+=s.vis||0; inv+=s.inv||0; });
+  let seg=0, inv=0;
+  seguidoresActive().forEach(s=>{ seg+=s.seg||0; inv+=s.inv||0; });
   const g=inv*taxf();
-  return {seg, vis, cps:seg?g/seg:null, cpv:vis?g/vis:null};
+  return {seg, cps:seg?g/seg:null};
 }
 function renderFunilPerfil(funil, ids){
   const F=funilScope(funil,null), fM=F.fM;
