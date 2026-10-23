@@ -92,11 +92,16 @@ import urllib.request
 import zipfile
 from datetime import datetime, timezone, timedelta
 
-SPREADSHEET_ID_META = "1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ"
-SHEET_META = "Página 1"
-# 2ª aba da mesma planilha de Meta Ads — sem Campaign Name (outro funil/conta,
-# não atribuível). Gasto/Impressões entram no total geral, nunca na quebra
-# por campanha (ver nota no topo do arquivo).
+# Meta Ads dos funis Quiz/WhatsApp (E2-CAP). Planilha trocada em 23/10/2026 —
+# tem UMA aba só, cujo nome real é "Página1" (sem espaço). O gviz cai na 1ª
+# aba quando o nome não existe, então o nome exato evita depender disso.
+SPREADSHEET_ID_META = "11Q6o75wcfhRYVcMU_F0eraL_roaRibqKuguCYMouNp8"
+SHEET_META = "Página1"
+# 2ª aba de Meta Ads (funil Visitas ao Perfil) — continua na planilha ANTIGA:
+# a nova não tem "Página 2" (o gviz devolveria a Página1 no lugar, sem erro).
+# Sem Campaign Name útil (outro funil/conta, não atribuível). Gasto/Impressões
+# entram no total geral, nunca na quebra por campanha (ver nota no topo).
+SPREADSHEET_ID_META_OTHER = "1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ"
 SHEET_META_OTHER = "Página 2"
 SPREADSHEET_ID_LEADS = "1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I"
 SHEET_LEADS = "Sessões"
@@ -362,7 +367,9 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows
          "msg_conv": ["messaging conversations started", "conversas por mensagem", "conversas iniciadas"],
          "link": ["creative instagram permalink", "instagram permalink", "permalink",
                   "creative link", "link do anuncio", "link do criativo"]},
-        {"day": 0, "campaign": 1, "adset": 2, "ad": 3, "impr": 4, "clicks": 5, "pv": 6, "spent": 7},
+        # Sem "pv" de propósito: a planilha atual não tem Landing Page Views, e a
+        # posição 6 é o Gasto — o fallback leria Gasto como Page Views.
+        {"day": 0, "campaign": 1, "adset": 2, "ad": 3, "impr": 4, "clicks": 5, "spent": 6},
     )
     ad_struct = build_ad_struct(meta_rows, midx)
 
@@ -668,7 +675,7 @@ def main():
     meta_rows = load_rows(sheet_url(SPREADSHEET_ID_META, SHEET_META), args.meta_file)
     leads_rows = load_rows(sheet_url(SPREADSHEET_ID_LEADS, SHEET_LEADS), args.leads_file)
     agenda_rows = load_rows(sheet_url(SPREADSHEET_ID_AGENDA, SHEET_AGENDA), args.agenda_file)
-    meta_other_rows = load_rows(sheet_url(SPREADSHEET_ID_META, SHEET_META_OTHER), args.meta_other_file)
+    meta_other_rows = load_rows(sheet_url(SPREADSHEET_ID_META_OTHER, SHEET_META_OTHER), args.meta_other_file)
     # Aba de Seguidores do mês corrente — resolvida a partir dos nomes REAIS
     # das abas (ver pick_month_sheet). Não achando, segue sem Seguidores em vez
     # de derrubar o build inteiro ou ler a aba errada; o resumo no fim avisa.
