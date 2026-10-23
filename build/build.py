@@ -97,12 +97,14 @@ from datetime import datetime, timezone, timedelta
 # aba quando o nome não existe, então o nome exato evita depender disso.
 SPREADSHEET_ID_META = "11Q6o75wcfhRYVcMU_F0eraL_roaRibqKuguCYMouNp8"
 SHEET_META = "Página1"
-# 2ª aba de Meta Ads (funil Visitas ao Perfil) — continua na planilha ANTIGA:
-# a nova não tem "Página 2" (o gviz devolveria a Página1 no lugar, sem erro).
-# Sem Campaign Name útil (outro funil/conta, não atribuível). Gasto/Impressões
-# entram no total geral, nunca na quebra por campanha (ver nota no topo).
-SPREADSHEET_ID_META_OTHER = "1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ"
-SHEET_META_OTHER = "Página 2"
+# Funil Visitas ao Perfil — desde 23/10/2026 vem da aba "Seguidores" da MESMA
+# planilha de Meta Ads (antes: aba "Página 2" da planilha antiga
+# 1L-QoyOYAp-ifK4Db9fbESRKDm2X-CGRurKs_3hADjKQ, parada em 18/10). Essa aba
+# traz TODAS as campanhas da conta, então só as de distribuição (DIST_TAG no
+# Campaign Name) entram — as E2-CAP já vêm da Página1 e contariam em dobro.
+SPREADSHEET_ID_META_OTHER = SPREADSHEET_ID_META
+SHEET_META_OTHER = "Seguidores"
+DIST_TAG = "E1-DIST"
 SPREADSHEET_ID_LEADS = "1tFaH49FCD2egRPjbzKP8_KixwXyyRjhMyOONSiLpR2I"
 SHEET_LEADS = "Sessões"
 # Campanhas de Engajamento/WhatsApp (clique abre conversa direto, sem quiz) —
@@ -405,7 +407,7 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows
             "funnel": classify_funnel(camp),
         })
 
-    # "Página 2" — funil "Visitas ao Perfil" (E1-DIST, Alcance/Engajamento),
+    # aba "Seguidores" (antes "Página 2") — funil "Visitas ao Perfil" (E1-DIST, Alcance/Engajamento),
     # não o E2-CAP deste dashboard. Traz Campaign Name/Ad Set Name/Ad Name
     # (atribuível por anúncio, igual à Página 1) — vira sua PRÓPRIA aba
     # "Funil Visitas ao Perfil", nunca misturada na quebra por campanha do
@@ -429,6 +431,8 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows
             continue
         d = parse_date(cell(row, mo_idx["day"]))
         if not d:
+            continue
+        if DIST_TAG not in cell(row, mo_idx["campaign"]):
             continue
         meta_other.append({
             "d": d,
