@@ -1,0 +1,16 @@
+name: _meta_probe (teste isolado, somente leitura)
+on: workflow_dispatch
+permissions:
+  contents: read
+concurrency:
+  group: meta-probe
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - run: python _tests/meta_api_probe.py
+        env:
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
