@@ -33,6 +33,14 @@ def show(title, obj):
 show("1. dono do token", get("me", fields="id,name"))
 perms = get("me/permissions")
 show("2. permissões concedidas", [p["permission"] for p in perms.get("data", []) if p.get("status") == "granted"] if "data" in perms else perms)
+accs = get("me/adaccounts", fields="name,account_id,account_status,amount_spent", limit=200)
+until0 = date.today()
+rows = []
+for a in accs.get("data", []):
+    i = get(f"{a['id']}/insights", time_range=json.dumps({"since": str(until0 - timedelta(days=30)), "until": str(until0)}), fields="spend")
+    rows.append({"id": a["id"], "nome": a.get("name"), "status": a.get("account_status"),
+                 "gasto_30d": (i.get("data") or [{}])[0].get("spend", "0") if "data" in i else i})
+show("2b. contas de anúncio visíveis ao token (+ gasto 30d)", rows if "data" in accs else accs)
 show("3. conta de anúncios", get(ACT, fields="name,account_status,currency,timezone_name"))
 
 camps = get(f"{ACT}/campaigns", fields="name,objective,effective_status", limit=200)
