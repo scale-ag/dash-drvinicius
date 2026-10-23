@@ -719,7 +719,7 @@ function renderGeralCore(ids, isGeral){
   hbar(ids.prof, Object.entries(byPr).map(([label,leads])=>({label,leads})), x=>x.leads, ()=>cvar('--chart-mqls'), 10);
   // tabela diaria (todos os leads), ultimo dia no topo + heatmap
   const dl=daily(fL,fM,fS,fA,fMO).slice().reverse();
-  const dailyCols = isGeral ? DAILY_COLS.filter(c=>!['cr','convlp'].includes(c.key)) : DAILY_COLS;
+  const dailyCols = isGeral ? DAILY_COLS.filter(c=>!['cr','convlp'].includes(c.key) && !NO_SALES_COLS.includes(c.key)) : DAILY_COLS;
   renderTable({id:ids.daily, cols:dailyCols, center:true, fit:true,
     rows:dl.map(x=>{const d=derive(x); return {k:x.d, cells:dailyCells(x,d)};}),
     total:(()=>{const d=derive(t);return dailyCells({...t,d:null},d,true);})(),
@@ -1021,6 +1021,9 @@ const DAILY_COLS=[
   {key:'convmql',label:'ConvMQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int',heat:'vendas'},{key:'cac',label:'CAC',type:'brl'},
   {key:'fat',label:'Fat.',type:'brl'},{key:'receita',label:'Receita',type:'brl'},{key:'roas',label:'ROAS',type:'num',heat:'roas'},
 ];
+/* colunas de MQL/venda removidas (pedido do cliente) das tabelas diária e
+   hierárquicas das abas Visão Geral, Quiz e WhatsApp — o Relatório mantém. */
+const NO_SALES_COLS=['mqls','convmql','vendas','cac','fat','receita','roas'];
 function dailyCells(x,d,isTotal){
   const s=salesOf(x);
   return {date:isTotal?null:x.d, wd:isTotal?'':weekday(x.d), gasto:d.gasto, cpm:d.cpm, ctr:d.ctr, cr:d.cr, convlp:d.convlp,
@@ -1123,9 +1126,9 @@ function renderFunilLeads(funil, ids){
     rows:topCacRows});
 
   const dl=daily(fL,fM,fS).slice().reverse();
-  const dailyCols = isWa
+  const dailyCols = (isWa
     ? DAILY_COLS.filter(c=>!['cr','convlp','tx','cpmql'].includes(c.key)).map(c=>c.key==='leads'?{...c,label:leadsLabel}:c)
-    : DAILY_COLS;
+    : DAILY_COLS).filter(c=>!NO_SALES_COLS.includes(c.key));
   renderTable({id:ids.daily, cols:dailyCols, center:true, fit:true,
     rows:dl.map(x=>{const d=derive(x); return {k:x.d, cells:dailyCells(x,d)};}),
     total:(()=>{const d=derive(t);return dailyCells({...t,d:null},d,true);})(),
@@ -1143,7 +1146,8 @@ function renderFunilLeads(funil, ids){
     {key:'convmql',label:'ConvMQL',type:'pct'},{key:'vendas',label:'Vendas',type:'int'},{key:'cac',label:'CAC',type:'brl'},
     {key:'fat',label:'Fat.',type:'brl'},{key:'receita',label:'Receita',type:'brl'},{key:'roas',label:'ROAS',type:'num'},
   ];
-  const hcols = isWa ? hcolsAll.filter(c=>!['cr','convlp','tx','cpmql'].includes(c.key)) : hcolsAll;
+  const hcols = (isWa ? hcolsAll.filter(c=>!['cr','convlp','tx','cpmql'].includes(c.key)) : hcolsAll)
+    .filter(c=>!NO_SALES_COLS.includes(c.key));
   function hierRows(map){ return Object.entries(map).map(([k,a])=>{const d=derive(a),s=salesOf(a);
     return {k, cells:{dim:k,gasto:d.gasto,cpm:d.cpm,ctr:d.ctr,cr:d.cr,convlp:d.convlp,leads:a.leads,cpl:d.cpl,tx:d.tx,mqls:a.mqls,cpmql:d.cpmql,
       convmql:s.convmql,vendas:s.vendas,cac:s.cac,fat:s.fat,receita:s.receita,roas:s.roas}};}); }

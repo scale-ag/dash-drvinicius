@@ -311,6 +311,12 @@ Cinco **páginas separadas** (sidebar):
    TODOS os anúncios de Quiz+WhatsApp juntos — não segue a separação por funil
    das abas 2‑4) + Insights de Tráfego. Ver `build/GUIA-RELATORIOS.md`.
 
+**Colunas de MQL/venda removidas (pedido do cliente, 23/10/2026)** das tabelas
+diária e hierárquicas (Campanha/Conjunto/Anúncio) das abas Visão Geral, Quiz e
+WhatsApp: MQLs · ConvMQL · Vendas · CAC · Fat. · Receita · ROAS
+(`NO_SALES_COLS` em `app.js`). O Relatório mantém todas. Cards do funil, gráficos
+e a tabela "Top anúncios por CAC" não foram alterados.
+
 **Ordem das colunas nas tabelas:** `Data · Dia · Gasto · CPM · CTR · ConvForm · Leads ·
 CPL · Tx‑MQL · MQLs · CPMQL · ConvMQL · Vendas · CAC · Fat. · Receita · ROAS`. Este
 cliente **não tem** coluna de Checkout/Add to Cart no Meta Ads — as colunas
