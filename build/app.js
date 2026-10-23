@@ -649,18 +649,18 @@ function kpiCard(k){ return `<div class="kpi ${k.hero?'hero':''}"><div class="kl
 const GERAL_IDS={funnel:'geralFunnel',kpis2:'geralKpis2',combo:'gCombo',source:'gSource',bucket:'gBucket',plat:'gPlat',prof:'gProf',daily:'gDaily'};
 const REL_IDS  ={funnel:'relFunnel', kpis2:'relKpis2', combo:'rCombo',source:'rSource',bucket:'rBucket',plat:'rPlat',prof:'rProf',daily:'rDaily'};
 function renderGeral(){ renderGeralCore(GERAL_IDS, true); }
-/* isGeral=true (só Visão Geral, NUNCA o Relatório — pedido do cliente):
-   - fMO (Página 2 / funil Visitas ao Perfil) fica fora de totals()/daily();
-     Visão Geral passa a somar só Quiz+WhatsApp (Página 1), os 2 funis de
-     captura de lead — Visitas ao Perfil é distribuição/alcance, não é
-     comparável com os outros 2 na mesma soma.
+/* A Visão Geral soma TUDO (pedido do cliente, 23/10/2026): Quiz + WhatsApp
+   (Página1) + Visitas ao Perfil (aba Seguidores / fMO) em Gasto, Impressões,
+   Cliques, CPM, CTR, CPC. Leads/MQLs só vêm de Quiz/WhatsApp, então CPL/CPMQL
+   também levam o gasto de distribuição no denominador.
+   isGeral=true (só Visão Geral, NUNCA o Relatório — pedido do cliente):
    - Some os steps "Vendas"/"Receita" do funil (ConvMQL/CAC/ROAS/Ticket) —
      "Receita" nunca tem dado nesse cliente (não há aba de Compradores, só
      DATA.sales=[]) e "Vendas" fica redundante com Agendamentos/Faturamento
      que já ficam. */
 function renderGeralCore(ids, isGeral){
   const fL=leadsActive(), fM=metaActive(), fS=salesActive(), fA=agendaActive();
-  const fMO = isGeral ? [] : metaOtherActive();
+  const fMO = metaOtherActive();
   const t=totals(fL,fM,fS,fA,fMO), dv=derive(t), g=dv.gasto;
   const NA='<span class="na-tag">sem dado</span>';
   const s=salesOf(t);
@@ -1331,7 +1331,9 @@ function ppApply(){
 }
 
 /* ---------------- navigation & boot ---------------- */
-const PAGE_IDS=['geral','quiz','whatsapp','perfil','rel'];
+/* 'rel' (Relatório) saiu do menu a pedido do cliente (23/10/2026) — a página
+   continua no HTML, só fica inacessível; setPage('rel') cai na Visão Geral. */
+const PAGE_IDS=['geral','quiz','whatsapp','perfil'];
 const PAGE_TITLES={geral:'Visão Geral de Leads',quiz:'Funil Quiz/LP',whatsapp:'Funil WhatsApp/Engajamento',perfil:'Funil Visitas ao Perfil',rel:'Relatório'};
 function setPage(p){ if(!PAGE_IDS.includes(p)) p='geral'; STATE.page=p;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.page===p));

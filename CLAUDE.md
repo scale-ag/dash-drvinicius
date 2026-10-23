@@ -273,10 +273,10 @@ Cinco **páginas separadas** (sidebar):
 1. **Visão Geral de Leads** — funil vertical (Gasto → Impressões → Cliques → Page
    Views → Leads → MQLs → Agendamentos → Faturamento) + KPIs secundários; gráfico
    combinado diário + tabela diária com heatmap; barras por origem/procedimento/
-   plataforma/procedimentos mais buscados. Soma **só Quiz + WhatsApp** (Página 1,
-   os 2 funis de captura de lead) — Página 2/Visitas ao Perfil (distribuição/
-   alcance, não captura) fica de fora da soma (pedido do cliente: não é
-   comparável com os outros 2 funis). Sem os steps Vendas/Receita (ConvMQL/CAC/
+   plataforma/procedimentos mais buscados. **Soma TUDO** (pedido do cliente,
+   23/10/2026): Quiz + WhatsApp (`Página1`) + Visitas ao Perfil (aba
+   `Seguidores`) em Gasto/Impressões/Cliques/CPM/CTR/CPC. Leads/MQLs só vêm de
+   Quiz/WhatsApp, então CPL/CPMQL incluem o gasto de distribuição. Sem os steps Vendas/Receita (ConvMQL/CAC/
    ROAS/Ticket) — "Receita" nunca tem dado nesse cliente (sem aba de
    Compradores) e "Vendas" ficou redundante com Agendamentos/Faturamento que já
    ficam. `renderGeralCore(ids, isGeral)` em `app.js`: `isGeral=true` só na
@@ -303,7 +303,9 @@ Cinco **páginas separadas** (sidebar):
    sem atribuição por anúncio (não entram nas 3 tabelas hierárquicas).
    As métricas "Visitas ao Perfil"/"Custo Por Visita no Perfil" foram
    **removidas a pedido do cliente** (card do funil + tabela diária).
-5. **Relatório** — espelha a Visão Geral **como ela era antes do item 1**
+5. **Relatório** — **removido do menu a pedido do cliente (23/10/2026)**: o HTML/JS
+   continua no build, mas `PAGE_IDS` não tem mais `'rel'` (`#rel` cai na Visão
+   Geral). Espelha a Visão Geral **como ela era antes do item 1**
    (`renderGeralCore(REL_IDS)`, sem `isGeral`) — continua somando os 3 funis
    (Quiz+WhatsApp+Página 2) e com os steps Vendas/Receita, por pedido explícito
    do cliente de não alterar o Relatório. + painel de
