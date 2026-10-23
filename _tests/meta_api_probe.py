@@ -5,7 +5,7 @@ from datetime import date, timedelta
 
 V = "v23.0"
 TOKEN = os.environ.get("META_ACCESS_TOKEN", "").strip()
-ACT = "act_10205578707965893"
+ACT = "act_1189400572310429"  # "Conta de Dr Vinícius (Em uso)"
 IG = "17841402980847524"
 
 print("META_ACCESS_TOKEN presente:", "SIM" if TOKEN else "NAO")
