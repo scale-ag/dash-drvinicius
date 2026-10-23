@@ -3,10 +3,10 @@
 import json, os, sys, urllib.error, urllib.parse, urllib.request
 from datetime import date, timedelta
 
-V = "v23.0"
+V = os.environ.get("META_V", "v23.0")
 TOKEN = os.environ.get("META_ACCESS_TOKEN", "").strip()
 ACT = "act_1189400572310429"
-print("token presente:", "SIM" if TOKEN else "NAO")
+print("token presente:", "SIM" if TOKEN else "NAO", "| versão:", V)
 if not TOKEN:
     sys.exit(0)
 
