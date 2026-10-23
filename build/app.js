@@ -719,7 +719,11 @@ function renderGeralCore(ids, isGeral){
   hbar(ids.prof, Object.entries(byPr).map(([label,leads])=>({label,leads})), x=>x.leads, ()=>cvar('--chart-mqls'), 10);
   // tabela diaria (todos os leads), ultimo dia no topo + heatmap
   const dl=daily(fL,fM,fS,fA,fMO).slice().reverse();
-  const dailyCols = isGeral ? DAILY_COLS.filter(c=>!['cr','convlp'].includes(c.key) && !NO_SALES_COLS.includes(c.key)) : DAILY_COLS;
+  // Visão Geral: + Cliques/CPC depois do CTR (pedido do cliente, 23/10/2026)
+  const dailyCols = isGeral
+    ? DAILY_COLS.filter(c=>!['cr','convlp'].includes(c.key) && !NO_SALES_COLS.includes(c.key))
+        .flatMap(c=>c.key==='ctr'?[c,{key:'cliques',label:'Cliques',type:'int'},{key:'cpc',label:'CPC',type:'brl'}]:[c])
+    : DAILY_COLS;
   renderTable({id:ids.daily, cols:dailyCols, center:true, fit:true,
     rows:dl.map(x=>{const d=derive(x); return {k:x.d, cells:dailyCells(x,d)};}),
     total:(()=>{const d=derive(t);return dailyCells({...t,d:null},d,true);})(),
@@ -1029,7 +1033,8 @@ function dailyCells(x,d,isTotal){
   return {date:isTotal?null:x.d, wd:isTotal?'':weekday(x.d), gasto:d.gasto, cpm:d.cpm, ctr:d.ctr, cr:d.cr, convlp:d.convlp,
     chk:d.chk, vischk:d.vischk,
     leads:x.leads, cpl:d.cpl, tx:d.tx, mqls:x.mqls, cpmql:d.cpmql,
-    convmql:s.convmql, vendas:s.vendas, cac:s.cac, fat:s.fat, receita:s.receita, roas:s.roas};
+    convmql:s.convmql, vendas:s.vendas, cac:s.cac, fat:s.fat, receita:s.receita, roas:s.roas,
+    cliques:x.cl, cpc:d.cpc};
 }
 /* colunas da tabela diária do funil "Visitas ao Perfil" — sem Leads/MQL/Vendas
    (esse funil não gera lead — ver build.py) nem Page Views/CR/CPV (pedido do
