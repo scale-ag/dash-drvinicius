@@ -371,6 +371,12 @@ def process(leads_rows, meta_rows, agenda_rows, meta_other_rows, seguidores_rows
         # posição 6 é o Gasto — o fallback leria Gasto como Page Views.
         {"day": 0, "campaign": 1, "adset": 2, "ad": 3, "impr": 4, "clicks": 5, "spent": 6},
     )
+    # "Full View Impressions" (só impressões vistas por inteiro, quase sempre 0)
+    # casaria com o alias "impressions" por substring quando a coluna
+    # "Impressions" some da extração — melhor ficar sem (CPM/CTR "-") do que
+    # mostrar CPM/CTR errados.
+    if midx["impr"] is not None and "full view" in norm(mheader[midx["impr"]]):
+        midx["impr"] = next((i for i, h in enumerate(mheader) if norm(h) == "impressions"), None)
     ad_struct = build_ad_struct(meta_rows, midx)
 
     meta = []
@@ -711,6 +717,8 @@ def main():
     n_fw = sum(1 for m in data["meta"] if m["funnel"] == "whatsapp")
     n_fo = sum(1 for m in data["meta"] if m["funnel"] == "outros")
     print(f"  meta      : {len(data['meta'])} linhas (quiz: {n_fq}  whatsapp: {n_fw}  outros: {n_fo})", file=sys.stderr)
+    if data["meta"] and not any(m["im"] for m in data["meta"]):
+        print("  meta      : !! IMPRESSOES ZERADAS — a aba de Meta Ads esta sem a coluna 'Impressions' (CPM/CTR ficam '-')", file=sys.stderr)
     mo_sp = sum(m["sp"] for m in data["meta_other"])
     print(f"  meta_other: {len(data['meta_other'])} linhas (funil Visitas ao Perfil)  gasto: R$ {mo_sp:,.2f}", file=sys.stderr)
     n_seg = len(data["seguidores"])
