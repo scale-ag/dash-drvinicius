@@ -278,7 +278,9 @@ Cinco **páginas separadas** (sidebar):
    `Seguidores`) em Gasto/Impressões/Cliques/CPM/CTR/CPC. Leads/MQLs só vêm de
    Quiz/WhatsApp, então CPL/CPMQL incluem o gasto de distribuição. A tabela
    diária da Visão Geral tem também Cliques e CPC (depois do CTR). No menu, o
-   Funil Quiz/LP fica por último (cliente não usa mais, só pra conferência). Sem os steps Vendas/Receita (ConvMQL/CAC/
+   Funil Quiz/LP fica por último (cliente não usa mais, só pra conferência).
+   A seção "Anúncios · MQLs · qualificação · CAC" (MQLs por anúncio, rosca de
+   Tx‑MQL, Compilado dos Anúncios) foi removida das abas Quiz e WhatsApp (23/10/2026). Sem os steps Vendas/Receita (ConvMQL/CAC/
    ROAS/Ticket) — "Receita" nunca tem dado nesse cliente (sem aba de
    Compradores) e "Vendas" ficou redundante com Agendamentos/Faturamento que já
    ficam. `renderGeralCore(ids, isGeral)` em `app.js`: `isGeral=true` só na

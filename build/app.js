@@ -1116,19 +1116,8 @@ function renderFunilLeads(funil, ids){
   document.getElementById(ids.funnel).innerHTML=funnelHTML(steps);
 
   comboChart(ids.combo, daily(fL,fM,fS));
-  const mqlByAd={}; fL.forEach(l=>{ mqlByAd[l.ad]=(mqlByAd[l.ad]||0)+l.q; });
-  hbar(ids.mqlAd, Object.entries(mqlByAd).map(([label,leads])=>({label,leads})), x=>x.leads, ()=>cvar('--chart-mqls'), 10, 'MQLs');
-  donutQlf(ids.qlfDonut, t.mqls, t.leads, ids.qlfPct);
-  const adAggM=buildAgg(fL,fM,fS,'ad');
-  const topCacRows=Object.entries(adAggM).map(([ad,a])=>{const d=derive(a),s=salesOf(a);
-    return {k:ad, cells:{dim:ad,mqls:a.mqls,cpmql:d.cpmql,vendas:s.vendas,cac:s.cac,fat:s.fat,roas:s.roas},
-      _ord:(s.cac!=null?s.cac:(d.cpmql!=null?d.cpmql:Infinity))};})
-    .sort((a,b)=>a._ord-b._ord).slice(0,10);
-  renderTable({id:ids.topCac, center:true,
-    cols:[{key:'dim',label:'Anúncios',type:'dim',big:true},{key:'mqls',label:'MQLs',type:'int'},
-      {key:'cpmql',label:'CPMQL',type:'brl'},{key:'vendas',label:'Vendas',type:'int'},
-      {key:'cac',label:'CAC',type:'brl'},{key:'fat',label:'Fat.',type:'brl'},{key:'roas',label:'ROAS',type:'num'}],
-    rows:topCacRows});
+  // seção "Anúncios · MQLs · qualificação · CAC" (MQLs por anúncio, rosca de
+  // Tx-MQL e Compilado dos Anúncios) removida a pedido do cliente (23/10/2026).
 
   const dl=daily(fL,fM,fS).slice().reverse();
   const dailyCols = (isWa
